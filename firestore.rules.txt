@@ -1,0 +1,36 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection: role-based access model
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid; // cada usuario solo lee su doc
+      allow write: if false; // evitar que cualquiera cambie su rol desde el cliente
+    }
+
+    // Menu: lectura pública; escritura solo admin
+    match /menu/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Orders: cualquiera puede crear (cliente); lectura para intranet; actualizar estado admin/operator
+    match /orders/{orderId} {
+      allow create: if true;
+      allow read: if true; // o restringir a intranet con isStaff()
+      allow update: if isAdmin() || isOperator();
+      allow delete: if false;
+    }
+
+    function isAdmin() {
+      return isRole('admin');
+    }
+    function isOperator() {
+      return isRole('operator');
+    }
+    function isRole(role) {
+      return request.auth != null && exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+  }
+}

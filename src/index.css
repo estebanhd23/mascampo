@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Reglas globales simples */
+* { box-sizing: border-box; }
+img { display:block; max-width:100%; height:auto; }
+
+/* Componentes/Utilidades con @apply dentro de @layer */
+@layer components {
+  .btn { @apply inline-flex items-center justify-center rounded px-3 py-2 font-medium; }
+  .btn-primary { @apply bg-brand-600 text-white hover:bg-brand-700; }
+  .btn-ghost { @apply bg-gray-200 hover:bg-gray-300 text-gray-800; }
+
+  /* Footer corporativo */
+  .footer-brand { @apply bg-brand-900 text-white; }
+}
+
+@layer base {
+  body { @apply leading-relaxed; }
+}
+
+/* Marquee simple para el aviso de horarios */
+@keyframes mc-marquee-left {
+  0%   { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+/* ====== Design tokens (tema claro/oscuro) ====== */
+:root {
+  --bg: #0b0f14;           /* fondo general (oscuro) */
+  --card: #0f141b;         /* fondo de tarjetas (oscuro) */
+  --text: #e6e6e7;         /* color de texto sobre oscuro */
+  --muted: #94a3b8;        /* gris suave */
+  --primary: #16a34a;      /* verde principal (emerald-600) */
+  --primary-hover: #15803d;
+  --ring: #22c55e33;       /* borde/sombra suave */
+  --radius: 16px;          /* esquinas redondeadas */
+  --shadow: 0 10px 30px -10px rgba(0,0,0,0.45);
+}
+
+html.light {
+  --bg: #f7f7f8;           /* fondo claro */
+  --card: #ffffff;         /* tarjetas claras */
+  --text: #0f172a;         /* texto sobre claro */
+  --muted: #475569;
+  --primary: #16a34a;
+  --primary-hover: #15803d;
+  --ring: #16a34a22;
+}
