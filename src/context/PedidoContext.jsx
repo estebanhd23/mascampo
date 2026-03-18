@@ -5,7 +5,6 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
-  createUserWithEmailAndPassword, 
 } from 'firebase/auth';
 import {
   subscribeMenu,
@@ -15,13 +14,10 @@ import {
   addOrder,
   updateOrderStatus as fbUpdateOrderStatus,
   completeOrder as fbCompleteOrder,
-  getMenuOnce,
-  setUserDoc,
-  // subscribeUserRole, // Ya no usamos esta, usamos onSnapshot directo al userDoc
 } from '../services/firestore';
 
 import { db } from '../firebase';
-import { doc, onSnapshot } from 'firebase/firestore'; // Importamos onSnapshot para el userDoc
+import { doc, onSnapshot } from 'firebase/firestore';
 
 const PedidoContext = createContext(null);
 export function usePedido() { return useContext(PedidoContext); }
@@ -30,20 +26,23 @@ export function PedidoProvider({ children }) {
   // Auth & User Info
   const [user, setUser] = useState(null);
   const [role, setRole] = useState('viewer');
-  const [userDoc, setUserDocState] = useState(null); // Documento de Firestore del usuario (para crédito)
+  const [userDoc, setUserDocState] = useState(null);
   const [loadingUserDoc, setLoadingUserDoc] = useState(true);
 
   // Menu
-  const [rawMenu, setRawMenu] = useState(null); // Menú sin procesar
+  const [rawMenu, setRawMenu] = useState(null);
   const [loadingMenu, setLoadingMenu] = useState(true);
 
   // Pedidos
   const [pedidosPendientes, setPedidosPendientes] = useState([]);
   const [pedidosHistorico, setPedidosHistorico] = useState([]);
 
-  // Base preference (si aplica)
-  const [baseType, setBaseType] = useState('arroz'); 
+  // Carritos (Fruver y ahora Parfaits)
+  const [cartFruver, setCartFruver] = useState([]);
+  const [cartParfaits, setCartParfaits] = useState([]);
 
+  // Preferencias
+  const [baseType, setBaseType] = useState('arroz'); 
 
   // 1. SUBSCRIPCIÓN DE AUTH Y DOCUMENTO DE USUARIO
   useEffect(() => {
@@ -59,13 +58,11 @@ export function PedidoProvider({ children }) {
       setLoadingUserDoc(true);
 
       if (u) {
-        // Suscribirse al documento de usuario (para rol y crédito B2B)
         const userRef = doc(db, 'users', u.uid);
-        
         unsubUserDoc = onSnapshot(userRef, (snap) => {
              const userData = snap.data() || {};
-             setUserDocState({ id: snap.id, ...userData }); // Guardar todo el doc
-             setRole(userData.role || 'viewer'); // Establecer el rol
+             setUserDocState({ id: snap.id, ...userData });
+             setRole(userData.role || 'viewer');
              setLoadingUserDoc(false);
         }, (err) => {
             console.error('subscribeUserDoc error:', err.code, err.message);
@@ -83,22 +80,17 @@ export function PedidoProvider({ children }) {
     };
   }, []); 
 
-
-  // 2. SUBSCRIPCIÓN DEL MENÚ (Carga los datos crudos)
+  // 2. SUBSCRIPCIÓN DEL MENÚ
   useEffect(() => {
     let unsubMenu;
-    
     unsubMenu = subscribeMenu((m) => {
         setRawMenu(m);
         setLoadingMenu(false);
     });
-
-    return () => {
-      if (unsubMenu) unsubMenu();
-    };
+    return () => { if (unsubMenu) unsubMenu(); };
   }, []); 
   
-  // 3. SUBSCRIPCIÓN DE PEDIDOS (Pendientes e Histórico)
+  // 3. SUBSCRIPCIÓN DE PEDIDOS
   useEffect(() => {
     const unsubPendientes = subscribeOrdersPendientes(setPedidosPendientes);
     const unsubHistorico = subscribeOrdersHistorico(setPedidosHistorico);
@@ -108,65 +100,79 @@ export function PedidoProvider({ children }) {
     };
   }, []);
 
-  // 4. 🛑 PROCESAMIENTO B2B DEL MENÚ (El verdadero "ProMenu")
+  // 4. PROCESAMIENTO B2B DEL MENÚ (Incluyendo Parfaits)
   const menu = useMemo(() => {
     if (!rawMenu) return null;
     
     const isRestaurant = role === 'restaurant';
     let processedMenu = { ...rawMenu };
 
-    // Si es un restaurante, aplicamos el precio B2B a los productos fruver
-    if (isRestaurant && Array.isArray(processedMenu.fruver)) {
-        
-        // Mapear productos fruver para aplicar precio B2B
-        processedMenu.fruver = processedMenu.fruver.map(item => {
-            
-            const b2bPrice = Number(item.price_b2b);
-            const standardPrice = Number(item.price || 0); // Precio original o B2C
+    const applyB2B = (items) => {
+      if (!Array.isArray(items)) return items;
+      return items.map(item => {
+        const b2bPrice = Number(item.price_b2b);
+        const standardPrice = Number(item.price || 0);
+        const finalPrice = (b2bPrice > 0) ? b2bPrice : standardPrice;
+        return {
+            ...item,
+            price: finalPrice, 
+            price_b2c: standardPrice
+        };
+      });
+    };
 
-            // Si el precio B2B es válido (> 0), úsalo. Si no, usa el precio estándar.
-            const finalPrice = (b2bPrice > 0) ? b2bPrice : standardPrice;
-            
-            // Retorna el ítem con 'price' SOBREESCRITO al precio final (B2B o estándar)
-            return {
-                ...item,
-                price: finalPrice, 
-                price_b2c: standardPrice // Guardamos el B2C para referencia
-            };
-        });
+    if (isRestaurant) {
+      if (processedMenu.fruver) processedMenu.fruver = applyB2B(processedMenu.fruver);
+      if (processedMenu.parfaits) processedMenu.parfaits = applyB2B(processedMenu.parfaits);
     }
 
     return processedMenu;
-  }, [rawMenu, role]); // Depende del menú crudo y del rol
+  }, [rawMenu, role]);
 
-  // Auth methods
+  // --- Funciones de Carrito ---
+  const addFruverItem = (item) => {
+    setCartFruver(prev => {
+      const existing = prev.find(x => x.id === item.id);
+      if (existing) {
+        return prev.map(x => x.id === item.id ? { ...x, quantity: x.quantity + item.quantity } : x);
+      }
+      return [...prev, item];
+    });
+  };
+
+  const addParfaitItem = (item) => {
+    setCartParfaits(prev => {
+      const existing = prev.find(x => x.id === item.id);
+      if (existing) {
+        return prev.map(x => x.id === item.id ? { ...x, quantity: x.quantity + item.quantity } : x);
+      }
+      return [...prev, item];
+    });
+  };
+
+  // Métodos Globales
   const login = (email, password) => signInWithEmailAndPassword(auth, email, password);
   const logout = () => signOut(auth);
   const addPedidoPendiente = (order) => addOrder({ ...order, userId: user?.uid });
   const updatePedidoStatus = fbUpdateOrderStatus;
   const completePedido = fbCompleteOrder;
-  const saveMenuInFirestore = saveMenu; // Exportamos la función de guardado
-
-  // Funciones de registro se omiten por espacio, asumo que ya existen
 
   const value = useMemo(() => ({
     user, role, userDoc, loadingUserDoc, 
-    // auth
     login, logout, 
-    // menú
-    menu, 
-    loadingMenu, 
-    setMenu: saveMenu, // <--- CORRECCIÓN AQUÍ: Ahora Intranet encontrará 'setMenu'
-    // pedidos
+    menu, loadingMenu, 
+    setMenu: saveMenu, 
     pedidosPendientes, pedidosHistorico,
     addPedidoPendiente, updatePedidoStatus, completePedido,
-    // preferencia de base
     baseType, setBaseType,
+    // Carritos y funciones nuevas
+    cartFruver, setCartFruver, addFruverItem,
+    cartParfaits, setCartParfaits, addParfaitItem,
   }), [
     user, role, userDoc, loadingUserDoc,
     menu, loadingMenu, 
     pedidosPendientes, pedidosHistorico, 
-    baseType
+    baseType, cartFruver, cartParfaits
   ]);
 
   return <PedidoContext.Provider value={value}>{children}</PedidoContext.Provider>;

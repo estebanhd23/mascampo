@@ -30,55 +30,65 @@ export default function ToppingSelector({ current, setCurrent, menu, ackExtras =
     setQty(id, nextQty);
   };
 
-  const clearItem = (id, e) => {
-    // Evita que el clic en “Quitar” también dispare el clic del card
+  const handleSubtract = (id, e) => {
     e?.stopPropagation?.();
-    setQty(id, 0);
+    const prevQty = current?.toppings?.[id] || 0;
+    if (prevQty > 0) {
+      setQty(id, prevQty - 1);
+    }
+  };
+
+  const handleAdd = (id, e) => {
+    e?.stopPropagation?.();
+    handleClick(id);
   };
 
   return (
-    <div className="space-y-3">
-      <div className="text-sm text-gray-600">
-        Incluidos: {incluidas} · Seleccionados: {totalSeleccionadas}
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-        {lista.map((t, idx) => {
-          const key = t?.id ? String(t.id) : `topping-${idx}`;
-          const qty = current?.toppings?.[t?.id] || 0;
-          const active = qty > 0;
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {lista.map((t, idx) => {
+        const key = t?.id ? String(t.id) : `topping-${idx}`;
+        const qty = current?.toppings?.[t?.id] || 0;
+        const active = qty > 0;
 
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => handleClick(t?.id)}
-              className={`relative border rounded p-2 hover:shadow text-left w-full ${
-                active ? "ring-2 ring-emerald-600 border-emerald-600" : ""
-              }`}
-              // Mantiene exactamente el mismo aspecto pero hace clic en todo el card
-            >
-              {active && t?.id && (
-                <button
-                  type="button"
-                  onClick={(e) => clearItem(t.id, e)}
-                  className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-600 text-white text-xs grid place-items-center shadow"
-                  title="Quitar"
-                >
-                  ×
+        return (
+          <div
+            key={key}
+            onClick={() => handleClick(t?.id)}
+            className={`group flex items-center justify-between p-3 border rounded-2xl transition-all duration-200 cursor-pointer select-none ${
+              active ? "border-emerald-500 bg-emerald-50/40 shadow-sm" : "border-gray-200 bg-white hover:border-emerald-300"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-50 shrink-0 border border-gray-100 flex items-center justify-center">
+                {t?.img ? (
+                  <img src={t.img} alt={t?.name} className="w-full h-full object-cover" />
+                ) : (
+                  <svg className="w-6 h-6 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                )}
+              </div>
+              <span className="font-semibold text-gray-800">{t?.name || "Topping"}</span>
+            </div>
+
+            <div className="flex items-center">
+              {active ? (
+                <div className="flex items-center bg-white rounded-full border border-emerald-500 shadow-sm overflow-hidden h-9" onClick={(e) => e.stopPropagation()}>
+                  <button type="button" onClick={(e) => handleSubtract(t.id, e)} className="w-9 h-full flex items-center justify-center text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
+                    <span className="text-xl leading-none mb-1">−</span>
+                  </button>
+                  <span className="w-6 text-center font-bold text-emerald-700 text-sm">{qty}</span>
+                  <button type="button" onClick={(e) => handleAdd(t.id, e)} className="w-9 h-full flex items-center justify-center text-emerald-600 hover:bg-emerald-50 active:bg-emerald-100 transition-colors">
+                    <span className="text-xl leading-none mb-1">+</span>
+                  </button>
+                </div>
+              ) : (
+                <button type="button" className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-400 group-hover:border-emerald-500 group-hover:text-emerald-500 group-active:scale-95 transition-all bg-white shadow-sm mr-1">
+                  <span className="text-xl leading-none mb-1">+</span>
                 </button>
               )}
-
-              <div className="w-full aspect-video bg-gray-100 rounded overflow-hidden mb-2">
-                {t?.img ? (
-                  <img src={t.img} alt={t?.name || "Topping"} className="w-full h-full object-cover" />
-                ) : null}
-              </div>
-              <div className="font-medium">{t?.name || "Topping"}</div>
-              {active && <div className="text-xs text-emerald-700 mt-1">Cantidad: {qty}</div>}
-            </button>
-          );
-        })}
-      </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

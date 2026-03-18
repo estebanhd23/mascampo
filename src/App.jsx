@@ -21,6 +21,7 @@ import { usePedido } from './context/PedidoContext.jsx';
 
 import NewOrderAlarm from "./components/NewOrderAlarm";
 import Clientes from "./pages/Clientes.jsx";
+import Parfaits from "./pages/Parfaits.jsx"
 
 
 
@@ -125,26 +126,6 @@ function Shell({ children }) {
       {/* Loader overlay */}
       <LoaderOverlay show={showLoader || !menu} logoUrl={menu?.logoUrl || ''} />
 
-      {/* Header (logo centrado, botones condicionales a la derecha) */}
-      <header className="border-b bg-white">
-        {/* Contenedor RELATIVE para centrar el logo sin nada a los lados */}
-        <div className="max-w-7xl mx-auto px-6 py-3 relative">
-          {/* CENTRO: LOGO perfectamente centrado */}
-          <NavLink to="/" className="block mx-auto w-fit">
-            {menu?.logoUrl ? (
-              <img src={menu.logoUrl} alt="Logo" className="h-10 sm:h-12 w-auto" />
-            ) : (
-              <div className="h-10 w-10 sm:h-12 sm:w-12 rounded bg-brand-600" />
-            )}
-          </NavLink>
-          
-          {/* IZQUIERDA intencionalmente vacía */}
-          <div className="absolute left-0 top-1/2 -translate-y-1/2" />
-          
-          {/* DERECHA: Botones condicionales */}
-          
-        </div>
-      </header>
 
       <main className="flex-1">{children}</main>
 
@@ -168,6 +149,7 @@ export default function App() {
           <Route path='/cliente' element={<Cliente />} />
           <Route path='/fruver' element={<Fruver />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/parfaits" element={<Parfaits />} />
 
           {/* Protegidas */}
           <Route
@@ -196,6 +178,9 @@ export default function App() {
               </AdminRoute>
             }
           />
+
+
+
 
 
 

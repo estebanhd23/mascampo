@@ -190,6 +190,8 @@ function buildItemsBlock(order, menu) {
       .join("\n");
   }
 
+
+
   // === BOWLS: resolver nombres desde menu si no vienen en el pedido ===
   const bowls     = Array.isArray(menu?.bowls) ? menu.bowls : [];
   const prote     = Array.isArray(menu?.proteinas) ? menu.proteinas : [];
@@ -407,6 +409,42 @@ function makeRange(fromStr, toStr) {
     completePedido,
   } = usePedido();
 
+  // ====== IMÁGENES DE LA TIENDA ======
+  const coverFromDb = menu?.settings?.storeImages?.cover;
+  const coverUrl = (coverFromDb && coverFromDb.trim() !== '') 
+    ? coverFromDb 
+    : 'https://images.unsplash.com/photo-1543353071-873f17a7a088?q=80&w=1200&auto=format&fit=crop';
+
+  const profileFromDb = menu?.settings?.storeImages?.profile;
+  const profileUrl = (profileFromDb && profileFromDb.trim() !== '') 
+    ? profileFromDb 
+    : 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=150&auto=format&fit=crop';
+
+    // ====== FUNCIÓN PARA GUARDAR IMÁGENES ======
+  const handleSaveImages = async () => {
+    try {
+      // Aquí asumimos que tienes variables de estado para los inputs (ej. coverInput, profileInput)
+      // Si tus inputs modifican directamente menu, esto lo guardará en Firebase:
+      const nextMenu = {
+        ...(menu || {}),
+        settings: {
+          ...(menu?.settings || {}),
+          storeImages: {
+            // Usa los valores actuales que tengas en el menú o las variables de tus inputs
+            cover: menu?.settings?.storeImages?.cover || "",
+            profile: menu?.settings?.storeImages?.profile || ""
+          }
+        }
+      };
+      
+      await setMenu(nextMenu);
+      alert("¡Imágenes actualizadas con éxito! ✅");
+    } catch (error) {
+      console.error("Error al guardar imágenes:", error);
+      alert("Hubo un error al guardar las imágenes.");
+    }
+  };
+
   const initialIdentity = useMemo(() => ({
     logoUrl: menu?.logoUrl || "",
     logoSize: menu?.settings?.logoSize || 80,
@@ -419,10 +457,9 @@ function makeRange(fromStr, toStr) {
 
   const [identityCfg, setIdentityCfg] = useState(initialIdentity);
 
-  /* 2. Efecto para actualizar cuando carga Firebase */
-  useEffect(() => {
-    setIdentityCfg(initialIdentity);
-  }, [initialIdentity]);
+  // 1. Asegúrate de tener estos dos estados al inicio de la función Intranet
+const [formParfait, setFormParfait] = useState({ name: '', price: '', price_b2b: '', img: '', description: '' });
+const [editingParfaitId, setEditingParfaitId] = useState(null); // Para saber si estamos editando
 
   /* 3. Función de Guardado */
   const saveIdentity = async () => {
@@ -513,6 +550,177 @@ const setManualOverride = async (value) => {
     }
     setPrevCount(pedidosPendientes.length);
   }, [pedidosPendientes.length, prevCount]);
+
+// ====== FUNCIÓN PARA IMPRIMIR COMANDA 58mm (UNIVERSAL GASTRO-FRUVER) ======
+const imprimirComanda = (pedido, menu) => {
+  if (!pedido) return;
+
+  // Helper para buscar nombres en el menú
+  const getName = (lista, id) => {
+    if (!Array.isArray(lista)) return id;
+    const item = lista.find(x => x.id === id);
+    return item ? item.name : id;
+  };
+
+  const fmt = (n) => Number(n || 0).toLocaleString("es-CO");
+  const orderIdCorto = String(pedido.id || "0000").slice(-5).toUpperCase();
+  const fecha = new Date().toLocaleString("es-CO");
+
+  const mensajes = [
+    "¡Disfruta tu comida y ten un excelente día! 💚",
+    "Hecho con amor y los mejores ingredientes. 🌱",
+    "El campo en tu mesa. ¡Gracias por elegirnos! 🥗",
+    "¡Aliméntate bien, siéntete increíble! 💪",
+    "Gracias por apoyar lo nuestro. ¡Que lo disfrutes! 🚜"
+  ];
+  const mensajeAleatorio = mensajes[Math.floor(Math.random() * mensajes.length)];
+
+  let html = `
+    <html>
+      <head>
+        <title>Comanda #${orderIdCorto}</title>
+        <style>
+          @page { margin: 0; }
+          body {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px; color: #000; margin: 0; padding: 4px; width: 58mm;
+          }
+          h2, h3, p { margin: 2px 0; }
+          .text-center { text-align: center; }
+          .bold { font-weight: bold; }
+          .divider { border-top: 1px dashed #000; margin: 6px 0; }
+          .item-row { display: flex; justify-content: space-between; margin-bottom: 2px; align-items: flex-start;}
+          .item-name { flex: 1; padding-right: 5px; font-size: 13px; }
+          .category-title { font-weight: bold; margin-top: 5px; margin-bottom: 1px; font-size: 10px; text-decoration: underline; text-transform: uppercase; }
+          .sub-item { padding-left: 8px; font-size: 11px; line-height: 1.2; }
+        </style>
+      </head>
+      <body>
+        <div class="text-center">
+          <h2 class="bold">MÁS CAMPO</h2>
+          <p>${pedido.type === 'fruver' ? 'LISTA DE MERCADO' : 'PEDIDO GASTRO'}</p>
+          <div class="divider"></div>
+          <h3 class="bold">PEDIDO #${orderIdCorto}</h3>
+          <p>${fecha}</p>
+        </div>
+        
+        <div class="divider"></div>
+        <p><span class="bold">Cliente:</span> ${pedido.entrega?.nombre || 'N/A'}</p>
+        <p><span class="bold">Tel:</span> ${pedido.entrega?.telefono || 'N/A'}</p>
+        <p><span class="bold">Dir:</span> ${pedido.entrega?.direccion || 'N/A'}</p>
+        ${pedido.entrega?.barrioName ? `<p><span class="bold">Barrio:</span> ${pedido.entrega.barrioName}</p>` : ''}
+        ${pedido.entrega?.notas ? `<p><span class="bold">Notas:</span> ${pedido.entrega.notas}</p>` : ''}
+        
+        <div class="divider"></div>
+        <p class="bold">CANT DESCRIPCIÓN         TOTAL</p>
+        <div class="divider"></div>
+  `;
+
+  const items = Array.isArray(pedido.items) ? pedido.items : [];
+  
+  items.forEach((item) => {
+    // === CASO FRUVER ===
+    if (pedido.type === 'fruver') {
+      html += `
+        <div class="item-row bold">
+          <span class="item-name">${item.qty}x ${item.name}</span>
+          <span>$${fmt(item.lineTotal || item.subtotal)}</span>
+        </div>
+        <div class="sub-item" style="margin-bottom:4px;">Unidad: ${item.unit || 'unidad'}</div>
+      `;
+    } 
+    // === CASO GASTRO (BOWLS) ===
+    else {
+      const bowlName = getName(menu?.bowls, item.bowlId) || 'Bowl Personalizado';
+      html += `
+        <div class="item-row bold">
+          <span class="item-name">1x ${bowlName}</span>
+          <span>$${fmt(item.price)}</span>
+        </div>
+      `;
+
+      // Proteínas
+      if (item.proteinas && typeof item.proteinas === 'object') {
+        const prots = Object.entries(item.proteinas).filter(([_, q]) => q > 0);
+        if (prots.length > 0) {
+          html += `<div class="category-title">Proteínas:</div>`;
+          prots.forEach(([id, q]) => {
+            html += `<div class="sub-item">- ${q}x ${getName(menu?.proteinas, id)}</div>`;
+          });
+        }
+      }
+
+      // Toppings
+      if (item.toppings && typeof item.toppings === 'object') {
+        const tops = Object.entries(item.toppings).filter(([_, q]) => q > 0);
+        if (tops.length > 0) {
+          html += `<div class="category-title">Toppings:</div>`;
+          tops.forEach(([id, q]) => {
+            html += `<div class="sub-item">- ${q}x ${getName(menu?.toppings, id)}</div>`;
+          });
+        }
+      }
+
+      // Salsas
+      if (item.salsas && typeof item.salsas === 'object') {
+        const sals = Object.keys(item.salsas);
+        if (sals.length > 0) {
+          html += `<div class="category-title">Salsas:</div>`;
+          sals.forEach((id) => {
+            html += `<div class="sub-item">- 1x ${getName(menu?.salsas, id)}</div>`;
+          });
+        }
+      }
+
+      // Combo
+      if (item.combo) {
+        html += `<div class="category-title">Combo Incluido:</div>`;
+        if (item.comboBebidaId) html += `<div class="sub-item">- Bebida: ${getName(menu?.combo?.bebidas250 || menu?.bebidas, item.comboBebidaId)}</div>`;
+        if (item.comboSnackId) html += `<div class="sub-item">- Snack: ${getName(menu?.combo?.snacks, item.comboSnackId)}</div>`;
+      }
+
+      // Bebidas extra
+      if (item.bebidas && typeof item.bebidas === 'object') {
+        const drinks = Object.entries(item.bebidas).filter(([_, q]) => q > 0);
+        if (drinks.length > 0) {
+          html += `<div class="category-title">Bebidas Extra:</div>`;
+          drinks.forEach(([id, q]) => {
+            html += `<div class="sub-item">- ${q}x ${getName(menu?.bebidas, id)}</div>`;
+          });
+        }
+      }
+    }
+    html += `<div class="divider"></div>`;
+  });
+
+  html += `
+        <div class="item-row"><span>Subtotal:</span><span>$${fmt(pedido.subtotal)}</span></div>
+        <div class="item-row"><span>Domicilio:</span><span>$${fmt(pedido.deliveryFee)}</span></div>
+        ${pedido.pricing?.promoDiscount > 0 ? `
+          <div class="item-row"><span>Descuento:</span><span>-$${fmt(pedido.pricing.promoDiscount)}</span></div>
+        ` : ''}
+        <div class="divider"></div>
+        <div class="item-row bold" style="font-size: 15px;"><span>TOTAL:</span><span>$${fmt(pedido.total)}</span></div>
+        <div class="text-center" style="margin-top: 15px; font-style: italic;">"${mensajeAleatorio}"</div>
+        <div class="text-center" style="margin-top: 10px;">.</div>
+      </body>
+    </html>
+  `;
+
+  // Lógica de impresión
+  const iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  document.body.appendChild(iframe);
+  const frameDoc = iframe.contentWindow.document;
+  frameDoc.open();
+  frameDoc.write(html);
+  frameDoc.close();
+  iframe.onload = () => {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(() => document.body.removeChild(iframe), 2000);
+  };
+};
 
   // ===== Admins (emails) =====
   const initialAdmins = useMemo(
@@ -1049,6 +1257,7 @@ const fruverVisible = useMemo(() => {
     const mayDisc = Number(p?.pricing?.mayoristaDiscount || 0);
 
     return (
+      
       <div className="border rounded-xl p-4 bg-white flex flex-col justify-between shadow-sm hover:shadow-md transition">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -1176,7 +1385,7 @@ const DetailBody = ({ p }) => {
 
 
   return (
-    // ⬇️ Contenedor scrollable del detalle
+    
     <div
       className="
         space-y-3
@@ -1309,6 +1518,36 @@ const DetailBody = ({ p }) => {
 
   return (
     <>
+    {/* ====== BARRA DE NAVEGACIÓN RÁPIDA (STICKY) ====== */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center gap-3">
+          <span className="text-sm font-bold text-gray-500 uppercase tracking-wider hidden sm:block">
+            Ir a la tienda:
+          </span>
+          
+          <Link 
+            to="/" 
+            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
+          >
+            🏠 Inicio (Homesplit)
+          </Link>
+          
+          <Link 
+            to="/cliente" 
+            className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors border border-emerald-100"
+          >
+            🥗 Bowls
+          </Link>
+          
+          <Link 
+            to="/fruver" 
+            className="px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors border border-orange-100"
+          >
+            🍎 Frutas y Verduras
+          </Link>
+        </div>
+      </div>
+      {/* ================================================== */}
       {/* ====== MENÚ SUPERIOR RESPONSIVE ====== */}
       <nav className="sticky top-0 z-[1100] bg-white/80 backdrop-blur border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
@@ -1370,19 +1609,20 @@ const DetailBody = ({ p }) => {
             <div className="card p-3 toc">
               <div className="text-xs font-semibold text-gray-500 uppercase px-2 mb-1">Índice</div>
 
-              <a href="#pedidos">Pedidos (pendientes / histórico)</a>
               <a href="#horarios">Horario y estado de tienda</a>
+              <a href="#pedidos">Pedidos (pendientes / histórico)</a>
               <a href="#editor-menu">Editor de menú</a>
+              <a href="#bebidas-categorias">Bebidas · Categorías</a>
+              <a href="#promos">Promociones</a>
+              <a href="#promo-codes">Códigos promocionales</a>
+              <a href="#temporada">Fruver · Temporada</a>
+              <a href="#combo">Combo</a>
+              <a href="#fruver-admin">Fruver </a>                
+              <a href="#fruver-precios">Fruver · Carga masiva</a>
               {role === "admin" && (
                 <>
                   <a href="#home">Inicio (HomeSplit)</a>
-                  <a href="#bebidas-categorias">Bebidas · Categorías</a>
-                  <a href="#promos">Promociones</a>
-                  <a href="#promo-codes">Códigos promocionales</a>
-                  <a href="#temporada">Fruver · Temporada</a>
-                  <a href="#combo">Combo</a>
-                  <a href="#fruver-admin">Fruver </a>
-                  <a href="#fruver-precios">Fruver · Carga masiva</a>
+
                   <a href="#wa">Mensajes WhatsApp</a>
                   <a href="#usuarios">Usuarios y permisos</a>
                 </>
@@ -1504,57 +1744,295 @@ const DetailBody = ({ p }) => {
                 <div className="text-sm text-gray-500">Solo los administradores pueden editar el horario.</div>
               )}
             </AccordionCard>
+            {/* 👇 ACORDEÓN PARA IMÁGENES DE LA TIENDA */}
+            {role === "admin" && (
+            <AccordionCard id="store-images" title="🖼️ Imágenes de Portada y Perfil">
+              <div className="space-y-8">
+                
+                {/* --- SECCIÓN GASTRO (Bowls) --- */}
+                <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100">
+                  <h3 className="font-bold text-emerald-800 mb-4 flex items-center gap-2">
+                    🥗 Sección Gastro (Bowls)
+                  </h3>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Portada Gastro (URL)</label>
+                      <input
+                        className="w-full border p-2 rounded-lg text-sm"
+                        value={menu?.settings?.storeImages?.coverGastro || ""}
+                        onChange={(e) => {
+                          const next = { ...menu };
+                          if(!next.settings) next.settings = {};
+                          if(!next.settings.storeImages) next.settings.storeImages = {};
+                          next.settings.storeImages.coverGastro = e.target.value;
+                          setMenu(next); // Usamos el setMenu del context
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Perfil Gastro (URL)</label>
+                      <input
+                        className="w-full border p-2 rounded-lg text-sm"
+                        value={menu?.settings?.storeImages?.profileGastro || ""}
+                        onChange={(e) => {
+                          const next = { ...menu };
+                          if(!next.settings) next.settings = {};
+                          if(!next.settings.storeImages) next.settings.storeImages = {};
+                          next.settings.storeImages.profileGastro = e.target.value;
+                          setMenu(next);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
 
-       
+                {/* --- SECCIÓN FRUVER (Mercado) --- */}
+                <div className="p-4 bg-orange-50/50 rounded-2xl border border-orange-100">
+                  <h3 className="font-bold text-orange-800 mb-4 flex items-center gap-2">
+                    🍎 Sección Fruver (Mercado)
+                  </h3>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Portada Fruver (URL)</label>
+                      <input
+                        className="w-full border p-2 rounded-lg text-sm"
+                        value={menu?.settings?.storeImages?.coverFruver || ""}
+                        onChange={(e) => {
+                          const next = { ...menu };
+                          if(!next.settings) next.settings = {};
+                          if(!next.settings.storeImages) next.settings.storeImages = {};
+                          next.settings.storeImages.coverFruver = e.target.value;
+                          setMenu(next);
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Perfil Fruver (URL)</label>
+                      <input
+                        className="w-full border p-2 rounded-lg text-sm"
+                        value={menu?.settings?.storeImages?.profileFruver || ""}
+                        onChange={(e) => {
+                          const next = { ...menu };
+                          if(!next.settings) next.settings = {};
+                          if(!next.settings.storeImages) next.settings.storeImages = {};
+                          next.settings.storeImages.profileFruver = e.target.value;
+                          setMenu(next);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <p className="text-xs text-gray-400 mb-2">Los cambios se guardan automáticamente en la nube</p>
+                </div>
+              </div>
+            </AccordionCard>
+            )}
 
             {/* ======= Pedidos ======= */}
-<AccordionCard
-  id="pedidos"
-  title="Pedidos (pendientes / histórico)"
-  aside={
-    <span className="text-sm text-gray-500">
-      {pedidosPendientes.length} pend. · {pedidosHistorico.length} hist.
-    </span>
-  }
->
-  <div className="space-y-6">
-    <div className="card">
-      <div className="card-h">
-        <h2 className="text-lg font-semibold">Pendientes</h2>
-        <span className="text-sm text-gray-500">{pedidosPendientes.length} pedido(s)</span>
-      </div>
-                <div className="p-4">
-                  {pedidosPendientes.length === 0 ? (
-                    <div className="text-sm text-gray-500">No hay pedidos pendientes.</div>
-                  ) : (
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {pedidosPendientes.map((p) => (
-                        <PedidoCard key={p.id} p={p} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+            <AccordionCard
+              id="pedidos"
+              title="Pedidos (pendientes / histórico)"
+              aside={
+                <span className="text-sm text-gray-500">
+                  {pedidosPendientes.length} pend. · {pedidosHistorico.length} hist.
+                </span>
+              }
+            >
+              <div className="space-y-6">
+                <div className="card">
+                  <div className="card-h">
+                    <h2 className="text-lg font-semibold">Pendientes</h2>
+                    <span className="text-sm text-gray-500">{pedidosPendientes.length} pedido(s)</span>
+                  </div>
+                            <div className="p-4">
+                              {pedidosPendientes.length === 0 ? (
+                                <div className="text-sm text-gray-500">No hay pedidos pendientes.</div>
+                              ) : (
+                                <div className="grid md:grid-cols-2 gap-4">
+                                  {pedidosPendientes.map((p) => (
+                                    <PedidoCard key={p.id} p={p} />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
 
-              <div className="card">
-                <div className="card-h">
-                  <h2 className="text-lg font-semibold">Histórico</h2>
-                  <span className="text-sm text-gray-500">{pedidosHistorico.length} pedido(s)</span>
-                </div>
-                <div className="p-4">
-                  {pedidosHistorico.length === 0 ? (
-                    <div className="text-sm text-gray-500">Aún no hay pedidos completados.</div>
-                  ) : (
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {pedidosHistorico.map((p) => (
-                        <PedidoCard key={p.id} p={p} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+                          <div className="card">
+                            <div className="card-h">
+                              <h2 className="text-lg font-semibold">Histórico</h2>
+                              <span className="text-sm text-gray-500">{pedidosHistorico.length} pedido(s)</span>
+                            </div>
+                            <div className="p-4">
+                              {pedidosHistorico.length === 0 ? (
+                                <div className="text-sm text-gray-500">Aún no hay pedidos completados.</div>
+                              ) : (
+                                <div className="grid md:grid-cols-2 gap-4">
+                                  {pedidosHistorico.map((p) => (
+                                    <PedidoCard key={p.id} p={p} />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
             </AccordionCard>
+
+            {/* ======= GESTIÓN DE PARFAITS ======= */}
+{/* ======= GESTIÓN DE PARFAITS ======= */}
+<AccordionCard id="gestion-parfaits" title="🍨 Catálogo de Parfaits">
+  <div className="space-y-6">
+    
+    {/* FORMULARIO DE CREACIÓN / EDICIÓN */}
+    <div className={`p-6 border rounded-[2rem] shadow-sm transition-all ${editingParfaitId ? 'bg-amber-50 border-amber-200' : 'bg-purple-50/50 border-purple-100'}`}>
+      <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2 text-lg">
+        {editingParfaitId ? '📝 Editando Parfait' : '✨ Agregar Nuevo Parfait'}
+      </h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div>
+          <label className="block text-xs font-bold text-gray-500 mb-1.5 ml-1">Nombre</label>
+          <input 
+            className="w-full border border-gray-200 p-3 rounded-xl text-sm outline-none bg-white" 
+            value={formParfait.name}
+            onChange={(e) => setFormParfait({...formParfait, name: e.target.value})}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-gray-500 mb-1.5 ml-1">Precio Público ($)</label>
+          <input 
+            type="number"
+            className="w-full border border-gray-200 p-3 rounded-xl text-sm outline-none bg-white" 
+            value={formParfait.price}
+            onChange={(e) => setFormParfait({...formParfait, price: e.target.value})}
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-bold text-gray-500 mb-1.5 ml-1">Precio PRO ($)</label>
+          <input 
+            type="number"
+            className="w-full border border-gray-200 p-3 rounded-xl text-sm outline-none bg-white" 
+            value={formParfait.price_b2b}
+            onChange={(e) => setFormParfait({...formParfait, price_b2b: e.target.value})}
+          />
+        </div>
+        <div className="lg:col-span-2">
+          <label className="block text-xs font-bold text-gray-500 mb-1.5 ml-1">URL de la Imagen</label>
+          <input 
+            className="w-full border border-gray-200 p-3 rounded-xl text-sm outline-none bg-white" 
+            value={formParfait.img}
+            onChange={(e) => setFormParfait({...formParfait, img: e.target.value})}
+          />
+        </div>
+        <div className="lg:col-span-3">
+          <label className="block text-xs font-bold text-gray-500 mb-1.5 ml-1">Descripción</label>
+          <textarea 
+            className="w-full border border-gray-200 p-3 rounded-xl text-sm outline-none bg-white" 
+            rows="2"
+            value={formParfait.description}
+            onChange={(e) => setFormParfait({...formParfait, description: e.target.value})}
+          />
+        </div>
+      </div>
+      
+      <div className="mt-5 flex justify-end gap-3">
+        {editingParfaitId && (
+          <button 
+            onClick={() => {
+              setEditingParfaitId(null);
+              setFormParfait({ name: '', price: '', price_b2b: '', img: '', description: '' });
+            }}
+            className="px-6 py-3 bg-gray-200 text-gray-600 font-bold rounded-2xl hover:bg-gray-300"
+          >
+            Cancelar
+          </button>
+        )}
+        <button 
+          onClick={() => {
+            if(!formParfait.name || !formParfait.price) return alert("Nombre y Precio son obligatorios");
+
+            const next = { ...menu };
+            if(!next.parfaits) next.parfaits = [];
+
+            if (editingParfaitId) {
+              // ACTUALIZAR EXISTENTE
+              next.parfaits = next.parfaits.map(p => p.id === editingParfaitId ? { ...p, ...formParfait, price: Number(formParfait.price), price_b2b: Number(formParfait.price_b2b) } : p);
+            } else {
+              // CREAR NUEVO
+              next.parfaits.push({
+                ...formParfait,
+                id: Date.now().toString(),
+                price: Number(formParfait.price),
+                price_b2b: Number(formParfait.price_b2b || 0),
+                active: true
+              });
+            }
+            
+            setMenu(next);
+            setEditingParfaitId(null);
+            setFormParfait({ name: '', price: '', price_b2b: '', img: '', description: '' });
+            alert("¡Cambios guardados! ✨");
+          }}
+          className={`px-8 py-3 text-white font-bold rounded-2xl shadow-md ${editingParfaitId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+        >
+          {editingParfaitId ? 'Actualizar Parfait' : 'Guardar Parfait'}
+        </button>
+      </div>
+    </div>
+
+    {/* LISTADO DE PARFAITS */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {(menu?.parfaits || []).map((p) => (
+        <div key={p.id} className="border rounded-3xl p-4 bg-white shadow-sm flex flex-col relative overflow-hidden group border-gray-100">
+          {!p.active && <div className="absolute inset-0 bg-gray-50/60 z-10 flex items-center justify-center font-black text-red-500 text-xs tracking-tighter uppercase">Pausado temporalmente</div>}
+          
+          <div className="flex gap-4 mb-4">
+            <div className="w-16 h-16 rounded-2xl bg-gray-50 overflow-hidden border border-gray-100 shrink-0">
+              <img src={p.img || 'https://via.placeholder.com/80'} className="w-full h-full object-cover" alt={p.name} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-bold text-gray-900 truncate text-sm">{p.name}</h4>
+              <p className="text-sm text-purple-600 font-bold">$ {Number(p.price).toLocaleString("es-CO")}</p>
+            </div>
+          </div>
+          
+          <div className="mt-auto flex gap-2 relative z-20">
+            <button 
+              onClick={() => {
+                setEditingParfaitId(p.id);
+                setFormParfait({ name: p.name, price: p.price, price_b2b: p.price_b2b || '', img: p.img || '', description: p.description || '' });
+              }}
+              className="flex-1 py-2 rounded-xl text-[10px] font-bold border border-gray-200 text-gray-600 bg-white hover:bg-gray-50"
+            >
+              EDITAR
+            </button>
+            <button 
+              onClick={() => {
+                const next = { ...menu };
+                next.parfaits = next.parfaits.map(x => x.id === p.id ? { ...x, active: !x.active } : x);
+                setMenu(next);
+              }}
+              className={`flex-1 py-2 rounded-xl text-[10px] font-bold border transition-all ${p.active ? 'border-gray-100 text-gray-400 bg-gray-50' : 'border-emerald-200 text-emerald-600 bg-emerald-50'}`}
+            >
+              {p.active ? 'PAUSAR' : 'ACTIVAR'}
+            </button>
+            <button 
+              onClick={() => {
+                if(!window.confirm(`¿Eliminar ${p.name}?`)) return;
+                const next = { ...menu };
+                next.parfaits = next.parfaits.filter(x => x.id !== p.id);
+                setMenu(next);
+              }}
+              className="px-3 py-2 rounded-xl border border-red-50 text-red-300 hover:text-red-500"
+            >
+              🗑️
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</AccordionCard>
             {/* ======= Editor de menú (ancla general) ======= */}
             <div id="editor-menu" />
 
@@ -1976,7 +2454,7 @@ const DetailBody = ({ p }) => {
     return (
       <div className="space-y-4">
         <p className="text-sm text-gray-600">
-          El <b>extraPrice</b> es el valor que se cobrará por proteína extra (el cliente puede pasar del límite del bowl).
+          El <b>extraPrice</b> es el valor por proteína extra (el cliente puede pasar del límite del bowl).
         </p>
 
         <div className="flex justify-end">
@@ -1991,10 +2469,7 @@ const DetailBody = ({ p }) => {
           <div className="grid md:grid-cols-2 gap-4">
             {prote.map((it, idx) => (
               <div key={it.id || idx} className="border rounded-xl overflow-hidden bg-white shadow-sm">
-                <div className="w-full aspect-video bg-gray-100 overflow-hidden">
-                  {it.img ? <img src={it.img} alt={it.name} className="w-full h-full object-cover" /> : null}
-                </div>
-                <div className="p-3 space-y-2">
+                <div className="p-3 space-y-3">
                   <div>
                     <label className="block text-xs text-gray-600 mb-1">Nombre</label>
                     <input
@@ -2002,6 +2477,26 @@ const DetailBody = ({ p }) => {
                       value={it.name ?? ""}
                       onChange={(e) => upd(idx, { name: e.target.value })}
                     />
+                  </div>
+
+                  {/* FOTO CON VISTA PREVIA (Limpio) */}
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">URL imagen</label>
+                    <div className="flex gap-3 items-center">
+                      <div className="w-10 h-10 shrink-0 bg-gray-100 rounded border border-gray-200 overflow-hidden flex items-center justify-center">
+                        {it.img ? (
+                          <img src={it.img} alt="preview" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-[10px] text-gray-400">Sin foto</span>
+                        )}
+                      </div>
+                      <input
+                        className="w-full border p-2 rounded-lg outline-none"
+                        placeholder="https://..."
+                        value={it.img || ""}
+                        onChange={(e) => upd(idx, { img: e.target.value })}
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -2022,16 +2517,6 @@ const DetailBody = ({ p }) => {
                         onChange={(e) => upd(idx, { id: slugify(e.target.value) })}
                       />
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-1">URL imagen</label>
-                    <input
-                      className="w-full border p-2 rounded-lg"
-                      value={it.img ?? ""}
-                      onChange={(e) => upd(idx, { img: e.target.value })}
-                      placeholder="https://..."
-                    />
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
@@ -2111,10 +2596,7 @@ const DetailBody = ({ p }) => {
           <div className="grid md:grid-cols-2 gap-4">
             {tops.map((it, idx) => (
               <div key={it.id || idx} className="border rounded-xl overflow-hidden bg-white shadow-sm">
-                <div className="w-full aspect-video bg-gray-100 overflow-hidden">
-                  {it.img ? <img src={it.img} alt={it.name} className="w-full h-full object-cover" /> : null}
-                </div>
-                <div className="p-3 space-y-2">
+                <div className="p-3 space-y-3">
                   <div>
                     <label className="block text-xs text-gray-600 mb-1">Nombre</label>
                     <input
@@ -2122,6 +2604,26 @@ const DetailBody = ({ p }) => {
                       value={it.name ?? ""}
                       onChange={(e) => upd(idx, { name: e.target.value })}
                     />
+                  </div>
+
+                  {/* FOTO CON VISTA PREVIA (Limpio) */}
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">URL imagen</label>
+                    <div className="flex gap-3 items-center">
+                      <div className="w-10 h-10 shrink-0 bg-gray-100 rounded border border-gray-200 overflow-hidden flex items-center justify-center">
+                        {it.img ? (
+                          <img src={it.img} alt="preview" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-[10px] text-gray-400">Sin foto</span>
+                        )}
+                      </div>
+                      <input
+                        className="w-full border p-2 rounded-lg outline-none"
+                        placeholder="https://..."
+                        value={it.img || ""}
+                        onChange={(e) => upd(idx, { img: e.target.value })}
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -2144,13 +2646,118 @@ const DetailBody = ({ p }) => {
                     </div>
                   </div>
 
+                  <div className="flex items-center justify-between pt-1">
+                    <small className="text-gray-500 break-all">{it.id}</small>
+                    <button
+                      type="button"
+                      className="px-2 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700"
+                      onClick={() => del(it.id)}
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="text-right">
+          <button onClick={save} className="px-4 py-2 rounded-lg bg-emerald-700 text-white hover:bg-emerald-800">
+            Guardar toppings
+          </button>
+        </div>
+      </div>
+    );
+  })()}
+</AccordionCard>
+<AccordionCard id="salsas-editor" title="Salsas">
+  {(() => {
+    const initial = Array.isArray(menu?.salsas) ? menu.salsas : [];
+    const [salsas, setSalsas] = React.useState(initial);
+
+    React.useEffect(() => setSalsas(Array.isArray(menu?.salsas) ? menu.salsas : []), [menu?.salsas]);
+
+    const add = () => {
+      const id = (crypto?.randomUUID?.() || Math.random().toString(36).slice(2));
+      setSalsas(p => [...p, { id, name: "Nueva salsa", img: "" }]);
+    };
+
+    const upd = (idx, patch) => {
+      setSalsas(p => {
+        const next = [...p];
+        next[idx] = { ...(next[idx] || {}), ...patch };
+        return next;
+      });
+    };
+
+    const del = (id) => setSalsas(p => p.filter(x => x.id !== id));
+
+    const save = async () => {
+      const cleaned = (salsas || []).map(x => ({
+        id: x.id || slugify(x.name || "salsa"),
+        name: String(x.name || "").trim(),
+        img: String(x.img || ""),
+      }));
+      const next = { ...(menu || {}), salsas: cleaned };
+      await setMenu(next);
+      alert("Salsas guardadas ✅");
+    };
+
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-gray-600">
+          Agrega las opciones de salsas. El cliente puede elegir varias sin costo extra.
+        </p>
+
+        <div className="flex justify-end">
+          <button onClick={add} className="px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700">
+            + Agregar salsa
+          </button>
+        </div>
+
+        {(!salsas || salsas.length === 0) ? (
+          <div className="text-sm text-gray-500">Aún no hay salsas. Agrega una para comenzar.</div>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-4">
+            {salsas.map((it, idx) => (
+              <div key={it.id || idx} className="border rounded-xl overflow-hidden bg-white shadow-sm">
+                <div className="p-3 space-y-3">
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1">URL imagen</label>
+                    <label className="block text-xs text-gray-600 mb-1">Nombre</label>
                     <input
                       className="w-full border p-2 rounded-lg"
-                      value={it.img ?? ""}
-                      onChange={(e) => upd(idx, { img: e.target.value })}
-                      placeholder="https://..."
+                      value={it.name ?? ""}
+                      onChange={(e) => upd(idx, { name: e.target.value })}
+                    />
+                  </div>
+
+                  {/* FOTO CON VISTA PREVIA */}
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">URL imagen</label>
+                    <div className="flex gap-3 items-center">
+                      <div className="w-10 h-10 shrink-0 bg-gray-100 rounded border border-gray-200 overflow-hidden flex items-center justify-center">
+                        {it.img ? (
+                          <img src={it.img} alt="preview" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-[10px] text-gray-400">Sin foto</span>
+                        )}
+                      </div>
+                      <input
+                        className="w-full border p-2 rounded-lg outline-none"
+                        placeholder="https://..."
+                        value={it.img || ""}
+                        onChange={(e) => upd(idx, { img: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">ID</label>
+                    <input
+                      className="w-full border p-2 rounded-lg font-mono text-xs"
+                      value={it.id ?? ""}
+                      onChange={(e) => upd(idx, { id: slugify(e.target.value) })}
                     />
                   </div>
 
@@ -2172,7 +2779,7 @@ const DetailBody = ({ p }) => {
 
         <div className="text-right">
           <button onClick={save} className="px-4 py-2 rounded-lg bg-emerald-700 text-white hover:bg-emerald-800">
-            Guardar toppings
+            Guardar salsas
           </button>
         </div>
       </div>
@@ -2377,7 +2984,7 @@ const DetailBody = ({ p }) => {
             )}
 
             {/* ======= Promociones ======= */}
-{role === "admin" && (
+
   <AccordionCard id="promos" title="Promociones (Bowls y Fruver)">
                 <div className="space-y-4">
                   <p className="text-sm text-gray-600">
@@ -2503,8 +3110,7 @@ const DetailBody = ({ p }) => {
                   </div>
                 </div>
               </AccordionCard>
-            )}
-{role === "admin" && (
+
   <AccordionCard
     id="promo-codes"
     title="Códigos promocionales"
@@ -2622,10 +3228,8 @@ const DetailBody = ({ p }) => {
       </div>
     </div>
   </AccordionCard>
-)}
 
-            {/* ======= Temporada Fruver ======= */}
-                {role === "admin" && (
+
                   <AccordionCard
                     id="temporada"
                     title="Fruver · Productos de temporada"
@@ -2698,12 +3302,11 @@ const DetailBody = ({ p }) => {
                   </div>
                 </div>
               </AccordionCard>
-            )}
 
            
 
             {/* ======= Combo ======= */}
-            {role === "admin" && (
+
               <AccordionCard id="combo" title="Combo: precio, bebidas 250 ml y snacks">
 
                 <div className="space-y-4">
@@ -2760,10 +3363,8 @@ const DetailBody = ({ p }) => {
                   </div>
                 </div>
               </AccordionCard>
-            )}
 
-            {/* ======= Bebidas · Categorías ======= */}
-            {role === "admin" && (
+ 
               <AccordionCard
                 id="bebidas-categorias"
                 title="Bebidas · Categorías"
@@ -2872,10 +3473,7 @@ const DetailBody = ({ p }) => {
                   </div>
                 </div>
               </AccordionCard>
-            )}
 
-            {/* ======= Fruver Admin ======= */}
-            {role === "admin" && (
               <AccordionCard
                 id="fruver-admin"
                 title="Fruver"
@@ -3018,9 +3616,7 @@ const DetailBody = ({ p }) => {
                   </div>
                 </div>
               </AccordionCard>
-            )}
 
-            {role === "admin" && (
   <AccordionCard
     id="fruver-precios"
     title="Fruver · Precios (CSV mínimo)"
@@ -3037,7 +3633,6 @@ const DetailBody = ({ p }) => {
 />
 
   </AccordionCard>
-)}
 
 
             {/* ======= Mensajes WhatsApp ======= */}
@@ -3129,12 +3724,24 @@ const DetailBody = ({ p }) => {
         </div>
       </div>
 
-      {/* Modal de detalle */}
+{/* Modal de detalle */}
       <Modal
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         title={detailOrder ? `Pedido #${detailOrder.id}` : "Detalle de pedido"}
       >
+        {detailOrder && (
+          <button 
+            onClick={() => imprimirComanda(detailOrder, menu)} 
+            className="w-full mb-4 px-4 py-3 bg-gray-800 text-white font-bold rounded-lg shadow-md hover:bg-black flex justify-center items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Imprimir Comanda (58mm)
+          </button>
+        )}
+
         <DetailBody p={detailOrder} />
       </Modal>
     </>

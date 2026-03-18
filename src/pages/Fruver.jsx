@@ -1,7 +1,7 @@
 // src/pages/Fruver.jsx
 import React, { useEffect, useMemo, useState, useRef } from "react";
-// 🛑 Importamos role, userDoc, y loadingMenu del contexto
 import { usePedido } from "../context/PedidoContext"; 
+import { useNavigate } from "react-router-dom"; // 🛑 Añadimos navigate para el logo
 import DeliveryPrefModal from "../components/DeliveryPrefModal";
 import PagoModal from "../components/PagoModal";
 import PedidoModal from "../components/PedidoModal";
@@ -10,598 +10,317 @@ import PedidoModal from "../components/PedidoModal";
 const MIN_ORDER_RESTAURANT = 30000; 
 
 function fmt(n) {
-  return (Number(n) || 0).toLocaleString("es-CO");
+  return (Number(n) || 0).toLocaleString("es-CO");
 }
 
 export default function Fruver() {
-  // 🛑 Importamos loadingMenu para mostrar estado de carga
-  const { menu, addPedidoPendiente, role, userDoc, loadingMenu } = usePedido(); 
+  const { menu, addPedidoPendiente, role, userDoc, loadingMenu } = usePedido(); 
+  const navigate = useNavigate();
 
-  // ======================
-  // Preferencia de entrega (se mantiene)
-  // ======================
-  const DELIVERY_SESSION_KEY = "mc_delivery_pref_session_v1";
-  const deliveryZones =
-    (menu?.barrios && Array.isArray(menu.barrios)
-      ? menu.barrios
-      : menu?.settings?.deliveryZones) || [];
+  // ====== IMÁGENES DE PORTADA Y PERFIL (Específicas de Fruver) ======
+  const coverFruver = menu?.settings?.storeImages?.coverFruver;
+  const profileFruver = menu?.settings?.storeImages?.profileFruver;
 
-  const [deliveryPref, setDeliveryPref] = useState(() => {
-    try {
-      const raw = sessionStorage.getItem(DELIVERY_SESSION_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [showDeliveryModal, setShowDeliveryModal] = useState(!deliveryPref);
+  const portadaUrl = (coverFruver && coverFruver.trim() !== '') 
+    ? coverFruver 
+    : 'https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=1200';
 
-  const handleDeliveryPrefSubmit = (pref) => {
-    let out = { ...pref };
-    if (pref?.modo === "Te lo llevamos") {
-      const z =
-        (deliveryZones || []).find((z) => z.id === pref.barrioId) ||
-        (deliveryZones || []).find((z) => z.name === pref.barrioName);
-      if (z) out = { ...out, barrioId: z.id, barrioName: z.name, fee: Number(z.fee || 0) };
-    } else {
-      delete out.barrioId;
-      delete out.barrioName;
-      delete out.fee;
-    }
-    setDeliveryPref(out);
-    try {
-      sessionStorage.setItem(DELIVERY_SESSION_KEY, JSON.stringify(out));
-    } catch {}
-    setShowDeliveryModal(false);
-  };
+  const perfilUrl = (profileFruver && profileFruver.trim() !== '') 
+    ? profileFruver 
+    : 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?q=80&w=150';
 
-  // ======================
-  // Catálogo Fruver (menu)
-  // ======================
-  // Solo mostrar productos activos (active !== false)
-const catalog = (menu?.fruver || []).filter((p) => p?.active !== false);
+  // ======================
+  // Preferencia de entrega
+  // ======================
+  const DELIVERY_SESSION_KEY = "mc_delivery_pref_session_v1";
+  const deliveryZones = (menu?.barrios && Array.isArray(menu.barrios) ? menu.barrios : menu?.settings?.deliveryZones) || [];
 
+  const [deliveryPref, setDeliveryPref] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem(DELIVERY_SESSION_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  });
+  const [showDeliveryModal, setShowDeliveryModal] = useState(!deliveryPref);
 
-  // IDs marcados en la intranet
-  const seasonalIDs = useMemo(
-    () => (Array.isArray(menu?.settings?.fruverSeasonal) ? menu.settings.fruverSeasonal : []),
-    [menu?.settings?.fruverSeasonal]
-  );
+  const handleDeliveryPrefSubmit = (pref) => {
+    let out = { ...pref };
+    if (pref?.modo === "Te lo llevamos") {
+      const z = (deliveryZones || []).find((z) => z.id === pref.barrioId) || (deliveryZones || []).find((z) => z.name === pref.barrioName);
+      if (z) out = { ...out, barrioId: z.id, barrioName: z.name, fee: Number(z.fee || 0) };
+    }
+    setDeliveryPref(out);
+    try { sessionStorage.setItem(DELIVERY_SESSION_KEY, JSON.stringify(out)); } catch {}
+    setShowDeliveryModal(false);
+  };
 
-  // Lista real de temporada
-  const seasonal = useMemo(() => {
-    const set = new Set((seasonalIDs || []).map(String));
-    return catalog.filter((p) => set.has(String(p.id)));
-  }, [catalog, seasonalIDs]);
+  const catalog = (menu?.fruver || []).filter((p) => p?.active !== false);
+  const seasonalIDs = useMemo(() => (Array.isArray(menu?.settings?.fruverSeasonal) ? menu.settings.fruverSeasonal : []), [menu?.settings?.fruverSeasonal]);
 
-  // ===== Ajuste de ancho de tarjeta para alinear con el grid (se mantiene)
-  const viewportRef = useRef(null);
-  const [cardW, setCardW] = useState(0);
+  const seasonal = useMemo(() => {
+    const set = new Set((seasonalIDs || []).map(String));
+    return catalog.filter((p) => set.has(String(p.id)));
+  }, [catalog, seasonalIDs]);
 
-  useEffect(() => {
-    const el = viewportRef.current;
-    if (!el) return;
+  const viewportRef = useRef(null);
+  const [cardW, setCardW] = useState(0);
 
-    const compute = () => {
-      const rect = el.getBoundingClientRect();
-      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-      const gap = 0.75 * rem; // gap-3 = 0.75rem
-      const isLg = window.matchMedia("(min-width:1024px)").matches; // tailwind lg
-      const cols = isLg ? 4 : 3;
-      const w = (rect.width - gap * (cols - 1)) / cols;
-      setCardW(w);
-    };
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const compute = () => {
+      const rect = el.getBoundingClientRect();
+      const rem = 16;
+      const gap = 0.75 * rem;
+      const isLg = window.matchMedia("(min-width:1024px)").matches;
+      const cols = isLg ? 4 : 3;
+      const w = (rect.width - gap * (cols - 1)) / cols;
+      setCardW(w);
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
-    compute();
-    const ro = new ResizeObserver(compute);
-    ro.observe(el);
+  const fruverDiscounts = (menu?.settings?.discounts?.fruver && typeof menu.settings.discounts.fruver === "object") ? menu.settings.discounts.fruver : {};
+  const [q, setQ] = useState("");
+  const isDiscountQuery = (term) => /(descuent|ofert|promo)/i.test(term);
 
-    const mq = window.matchMedia("(min-width:1024px)");
-    const onMQ = () => compute();
-    if (mq.addEventListener) mq.addEventListener("change", onMQ);
-    else mq.addListener(onMQ);
+  const visibleCatalog = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return catalog;
+    if (isDiscountQuery(term)) return catalog.filter((p) => Number(fruverDiscounts[p.id] || 0) > 0);
+    return catalog.filter((p) => (p.name || "").toLowerCase().includes(term));
+  }, [catalog, q, fruverDiscounts]);
 
-    return () => {
-      ro.disconnect();
-      if (mq.removeEventListener) mq.removeEventListener("change", onMQ);
-      else mq.removeListener(onMQ);
-    };
-  }, []);
+  const [qty, setQty] = useState({});
+  const setQtyClamped = (id, next) => {
+    let v = Math.max(0, Math.round(Number(next) || 0));
+    setQty((prev) => ({ ...prev, [id]: v }));
+  };
+  const inc = (id) => setQty((p) => ({ ...p, [id]: (Number(p[id]) || 0) + 1 }));
+  const dec = (id) => setQty((p) => ({ ...p, [id]: Math.max(0, (Number(p[id]) || 0) - 1) }));
 
-  // Mapa de descuentos
-  const fruverDiscounts =
-    (menu?.settings?.discounts?.fruver && typeof menu.settings.discounts.fruver === "object")
-      ? menu.settings.discounts.fruver
-      : {};
+  const items = useMemo(() => {
+    return catalog.filter((it) => (qty[it.id] || 0) > 0).map((it) => {
+      const q = Number(qty[it.id] || 0);
+      const price = Number(it.price || 0); 
+      const pct = Number(fruverDiscounts[it.id] || 0);
+      const effPrice = role === 'restaurant' ? price : price * (1 - pct / 100);
+      const line = q * effPrice;
+      return { id: it.id, name: it.name, unit: it.unit || "unidad", price: effPrice, qty: q, subtotal: line, lineTotal: line, img: it.img || "" };
+    });
+  }, [catalog, qty, fruverDiscounts, role]); 
 
-  // ===== Buscador (se mantiene) =====
-  const [q, setQ] = useState("");
-
-  // 👇 Palabras clave para detectar búsqueda de descuentos/ofertas/promos
-  const isDiscountQuery = (term) => /(descuent|ofert|promo)/i.test(term);
-
-  const visibleCatalog = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    if (!term) return catalog;
-
-    // Si el usuario busca descuentos/ofertas/promos → mostrar solo los que tienen % de descuento
-    if (isDiscountQuery(term)) {
-      return catalog.filter((p) => Number(fruverDiscounts[p.id] || 0) > 0);
-    }
-
-    // Búsqueda normal por nombre
-    return catalog.filter((p) => (p.name || "").toLowerCase().includes(term));
-  }, [catalog, q, fruverDiscounts]);
-
-  // Carrito fruver (se mantiene)
-  const [qty, setQty] = useState({});
-  const setQtyClamped = (id, next) => {
-    let v = Number(next);
-    if (!Number.isFinite(v)) v = 0;
-    v = Math.round(v);
-    if (v < 0) v = 0;
-    setQty((prev) => ({ ...prev, [id]: v }));
-  };
-  const inc = (id) => setQty((p) => ({ ...p, [id]: (Number(p[id]) || 0) + 1 }));
-  const dec = (id) => setQty((p) => ({ ...p, [id]: Math.max(0, (Number(p[id]) || 0) - 1) }));
-
-  const items = useMemo(() => {
-    return catalog
-      .filter((it) => (qty[it.id] || 0) > 0)
-      .map((it) => {
-        const q = Number(qty[it.id] || 0);
-        const price = Number(it.price || 0); 
-        const pct = Number(fruverDiscounts[it.id] || 0);
-        
-        // 🛑 LÓGICA DE PRECIO: 'price' ya contiene el precio B2B si el rol es 'restaurant'
-        const effPrice = role === 'restaurant'
-            ? price // Si es PRO, el precio ya viene del contexto con B2B
-            : price * (1 - pct / 100); // Si es B2C, aplica el descuento estándar B2C
-
-        const line = q * effPrice;
-        return {
-          id: it.id,
-          name: it.name,
-          unit: it.unit || "unidad",
-          price: effPrice,
-          qty: q,
-          subtotal: line,
-          lineTotal: line,
-          img: it.img || "",
-        };
-      });
-  }, [catalog, qty, fruverDiscounts, role]); 
-
-  const subtotal = useMemo(() => items.reduce((a, x) => a + x.subtotal, 0), [items]);
-
-  // Tarifa de domicilio (se mantiene)
-  const deliveryFee = useMemo(() => {
-    if (deliveryPref?.modo !== "Te lo llevamos") return 0;
-    if (typeof deliveryPref.fee === "number") return deliveryPref.fee;
-    const z =
-      (deliveryZones || []).find((z) => z.id === deliveryPref?.barrioId) ||
-      (deliveryZones || []).find((z) => z.name === deliveryPref?.barrioName);
-    return Number(z?.fee || 0);
-  }, [deliveryPref, deliveryZones]);
-
-  const total = subtotal + deliveryFee;
-
-  // 🛑 CÁLCULO DE RESTRICCIÓN B2B (MOQ)
-  const isBelowMOQ = useMemo(() => {
-    return role === 'restaurant' && subtotal < MIN_ORDER_RESTAURANT;
-  }, [role, subtotal]);
+  const subtotal = useMemo(() => items.reduce((a, x) => a + x.subtotal, 0), [items]);
+  const deliveryFee = useMemo(() => {
+    if (deliveryPref?.modo !== "Te lo llevamos") return 0;
+    return Number(deliveryPref?.fee || 0);
+  }, [deliveryPref]);
+  const total = subtotal + deliveryFee;
+  const isBelowMOQ = useMemo(() => role === 'restaurant' && subtotal < MIN_ORDER_RESTAURANT, [role, subtotal]);
   
-  // ======================
-  // Pago/Checkout
-  // ======================
-  const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const confirmFruverOrder = async (form) => {
-    if (items.length === 0) {
-      alert("Agrega al menos un producto 🙂");
-      return;
-    }
-    if (!deliveryPref) {
-      setShowDeliveryModal(true);
-      return;
-    }
-    // 🛑 DOBLE CHEQUEO DE RESTRICCIÓN (Seguridad)
-    if (isBelowMOQ) {
-      alert(`El subtotal de $${fmt(subtotal)} no cumple con la compra mínima de $${fmt(MIN_ORDER_RESTAURANT)} para clientes PRO.`);
-      return;
-    }
-    try {
-      setSaving(true);
-      const order = {
-        type: "fruver",
-        items: items.map(({ id, name, unit, price, qty, lineTotal }) => ({
-          id,
-          name,
-          unit,
-          price,
-          qty,
-          lineTotal,
-        })),
-        subtotal,
-        deliveryFee,
-        total,
-        entrega: { ...form, ...(deliveryPref || {}) },
-        status: "Pendiente",
-        createdAt: new Date().toISOString(),
-        // 🛑 GUARDAMOS EL METODO DE PAGO Y CRÉDITO
-        paymentMethod: form.metodoPago, 
-        creditDays: form.metodoPago === 'Crédito' ? userDoc?.credito?.cupo : undefined
-      };
-      await addPedidoPendiente(order);
-      setQty({});
-      setCheckoutOpen(false);
-      setConfirmOpen(true);
-    } catch (e) {
-      console.error(e);
-      alert("No se pudo guardar el pedido fruver");
-    } finally {
-      setSaving(false);
-    }
-  };
+  const confirmFruverOrder = async (form) => {
+    if (items.length === 0 || isBelowMOQ) return;
+    try {
+      setSaving(true);
+      const order = {
+        type: "fruver",
+        items: items,
+        subtotal, deliveryFee, total,
+        entrega: { ...form, ...(deliveryPref || {}) },
+        status: "Pendiente",
+        createdAt: new Date().toISOString(),
+        paymentMethod: form.metodoPago, 
+      };
+      await addPedidoPendiente(order);
+      setQty({});
+      setCheckoutOpen(false);
+      setConfirmOpen(true);
+    } catch (e) { alert("Error al guardar pedido"); } finally { setSaving(false); }
+  };
 
-  return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6">
-      <style>{`
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-
-        /* Swipe horizontal suave + snap */
-        .mc-swipe {
-          scroll-snap-type: x mandatory;
-          -webkit-overflow-scrolling: touch;
-          overscroll-behavior-x: contain;
-          touch-action: pan-x;
-        }
-        .mc-snap-start { scroll-snap-align: start; }
-
-        /* Chips compactos para badges, se ven bien en móvil */
-        .mc-badges {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.25rem; /* gap-1 */
-        }
-        .mc-chip {
-          font-size: 10px; /* ~text-[10px] */
-          line-height: 1;
-          font-weight: 700;
-          padding: 0.25rem 0.5rem; /* px-2 py-0.5 */
-          border-radius: 0.375rem; /* rounded */
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-        }
-        @media (min-width: 640px) { /* sm */
-          .mc-chip { font-size: 12px; }
-        }
-      `}</style>
+  return (
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <style>{`
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .mc-swipe { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+        .mc-snap-start { scroll-snap-align: start; }
+      `}</style>
       
-      {/* Encabezado con cambio de modo */}
-      <header className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Frutas y Verduras</h1>
-        <button
-          type="button"
-          onClick={() => setShowDeliveryModal(true)}
-          className="text-xs px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-        >
-          {deliveryPref
-            ? `${deliveryPref.modo}${
-                deliveryPref.modo === "Te lo llevamos"
-                  ? deliveryPref.barrioName
-                    ? ` · ${deliveryPref.barrioName} ($${fmt(deliveryFee || 0)})`
-                    : ""
-                  : deliveryPref.eta
-                  ? ` · ${deliveryPref.eta} min`
-                  : ""
-              } · Cambiar`
-            : "Elegir método de entrega"}
-        </button>
-      </header>
+      {/* ====== HEADER PREMIUM (PORTADA + PERFIL) ====== */}
+      <div className="relative mb-16"> 
+        <div className="w-full h-32 sm:h-48 bg-gray-200">
+          <img src={portadaUrl} alt="Portada Fruver" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-black/10"></div>
+        </div>
 
-      {/* Buscador */}
-      <div className="relative">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar frutas o verduras… "
-          className="w-full border rounded-full pl-10 pr-10 py-2 outline-none focus:ring-2 focus:ring-emerald-200"
-        />
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 select-none">🔎</span>
-        {q && (
-          <button
-            type="button"
-            onClick={() => setQ("")}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-            aria-label="Limpiar búsqueda"
-          >
-            ✕
-          </button>
-        )}
-      </div>
-
-      {/* TEMPORADA / OFERTAS (Swipe horizontal) */}
-      {seasonal.length > 0 && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-amber-100">🔥</span>
-              Temporada & Ofertas
-            </h2>
-          </div>
-
-          {/* Contenedor swipeable */}
-          <div
-            ref={viewportRef}
-            className="overflow-x-auto scrollbar-hide rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50/70 to-transparent mc-swipe"
-          >
-            <div className="flex items-stretch gap-3 px-3 py-3">
-              {seasonal.map((prod) => {
-                const q = Number(qty[prod.id] || 0);
-                const unit = prod.unit || "unidad";
-                const pct = Number(fruverDiscounts[prod.id] || 0);
-                const price = Number(prod.price || 0);
-                const effPrice = role === 'restaurant' ? price : price * (1 - pct / 100);
-
-                return (
-                  <div
-                    key={prod.id}
-                    className="shrink-0 grow-0 mc-snap-start"
-                    style={{ width: cardW ? `${cardW}px` : undefined }}
-                  >
-                    <div className="border rounded-lg overflow-hidden bg-white relative ring-1 ring-amber-100 shadow-sm hover:shadow-md">
-                      {/* Imagen */}
-                      <div className="w-full h-32 sm:h-40 md:h-48 bg-gray-50 overflow-hidden relative flex items-center justify-center">
-                        {prod.img ? (
-                          <img
-                            src={prod.img}
-                            alt={prod.name}
-                            loading="eager"
-                            className="max-h-24 sm:max-h-28 md:max-h-32 w-auto object-contain mx-auto"
-                          />
-                        ) : null}
-                      </div>
-
-                      <div className="p-2 sm:p-3 space-y-2">
-                        {/* 👇 Badges como chips (debajo de la imagen) */}
-                        <div className="mc-badges">
-                          <span className="mc-chip bg-amber-500 text-white">TEMPORADA</span>
-                          {pct > 0 && (
-                            <span className="mc-chip bg-red-600 text-white">Dcto {pct}%</span>
-                          )}
-                        </div>
-
-                        <div className="font-semibold text-xs sm:text-sm truncate">{prod.name}</div>
-
-                        {/* Precio con tachado si hay descuento */}
-                        <div className="text-[11px] sm:text-sm text-gray-600">
-                          {pct > 0 && role !== 'restaurant' ? (
-                            <>
-                              <span className="line-through mr-1">$ {fmt(Number(prod.price_b2c || price / (1 - pct/100)))}</span>
-                              <b>$ {fmt(effPrice)}</b> / {unit}
-                            </>
-                          ) : (
-                            <>
-                                <b>$ {fmt(effPrice)}</b> / {unit}
-                            </>
-                          )}
-                        </div>
-
-                        {/* Controles cantidad */}
-                        <div className="flex items-center justify-center gap-1 sm:gap-2">
-                          <button
-                            type="button"
-                            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 hover:bg-gray-200 grid place-items-center text-base sm:text-lg"
-                            onClick={() => dec(prod.id)}
-                          >
-                            –
-                          </button>
-
-                          <input
-                            type="number"
-                            step={1}
-                            min={0}
-                            className="w-14 sm:w-20 border p-1 sm:p-2 rounded text-center text-sm"
-                            value={q}
-                            onChange={(e) => setQtyClamped(prod.id, e.target.value)}
-                          />
-
-                          <button
-                            type="button"
-                            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 hover:bg-gray-200 grid place-items-center text-base sm:text-lg"
-                            onClick={() => inc(prod.id)}
-                          >
-                            +
-                          </button>
-                        </div>
-
-                        {q > 0 && (
-                          <div className="text-[11px] sm:text-sm text-gray-700 text-center">
-                            Subtotal: <b>$ {fmt(q * effPrice)}</b>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-      )}
-      
-      {/* 🛑 MENSAJE DE ESTADO DE CARGA/ERROR 🛑 */}
-      {loadingMenu && (
-        <div className="p-4 text-center text-gray-500">
-          Cargando catálogo de productos...
-        </div>
-      )}
-      
-      {/* Catálogo */}
-      <section>
-        {/* Usamos !loadingMenu para asegurarnos de que ya terminó de cargar antes de mostrar 'No hay productos' */}
-        {!loadingMenu && catalog.length === 0 ? (
-          <div className="p-8 text-center bg-gray-50 rounded-lg text-sm text-gray-500">
-            No se encontraron productos **fruver**. Revisa tu documento **menu/config** en Firestore.
-          </div>
-        ) : visibleCatalog.length === 0 ? (
-          <div className="p-4 text-center text-sm text-gray-500">Sin resultados para “{q}”.</div>
-        ) : (
-          <div className="grid grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {visibleCatalog.map((prod) => {
-              const qtty = Number(qty[prod.id] || 0);
-              const unit = prod.unit || "unidad";
-
-              const pct = Number(fruverDiscounts[prod.id] || 0);
-              const basePrice = Number(prod.price || 0);
-              const effPrice = role === 'restaurant' ? basePrice : basePrice * (1 - pct / 100);
-
-              return (
-                <div key={prod.id} className="border rounded-lg overflow-hidden bg-white relative">
-                  <div className="w-full aspect-square bg-gray-100 overflow-hidden">
-                    {prod.img ? (
-                      <img src={prod.img} alt={prod.name} className="w-full h-full object-cover" />
-                    ) : null}
-                  </div>
-
-                  <div className="p-2 sm:p-3 space-y-2">
-                    {/* 👇 Badges como chips (debajo de la imagen) */}
-                    <div className="mc-badges">
-                      {seasonalIDs.includes(String(prod.id)) && (
-                        <span className="mc-chip bg-amber-500 text-white">TEMPORADA</span>
-                      )}
-                      {pct > 0 && role !== 'restaurant' && (
-                        <span className="mc-chip bg-red-600 text-white">Dcto {pct}%</span>
-                      )}
-                    </div>
-
-                    <div className="font-semibold text-xs sm:text-sm truncate">{prod.name}</div>
-
-                    <div className="text-[11px] sm:text-sm text-gray-600">
-                        {/* Precio con tachado si hay descuento B2C O solo precio B2B */}
-                      {pct > 0 && role !== 'restaurant' ? (
-                        <>
-                          <span className="line-through mr-1">$ {fmt(Number(prod.price_b2c || basePrice / (1 - pct/100)))}</span>
-                          <b>$ {fmt(effPrice)}</b> / {unit}
-                        </>
-                      ) : (
-                        <>
-                            <b>$ {fmt(effPrice)}</b> / {unit}
-                        </>
-                      )}
-                    </div>
-
-                    {/* Controles cantidad — pasos de 1 */}
-                    <div className="flex items-center justify-center gap-1 sm:gap-2">
-                      <button
-                        type="button"
-                        className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 hover:bg-gray-200 grid place-items-center text-base sm:text-lg"
-                        onClick={() => dec(prod.id)}
-                      >
-                        –
-                      </button>
-
-                      <input
-                        type="number"
-                        step={1}
-                        min={0}
-                        className="w-14 sm:w-20 border p-1 sm:p-2 rounded text-center text-sm"
-                        value={qtty}
-                        onChange={(e) => setQtyClamped(prod.id, e.target.value)}
-                      />
-
-                      <button
-                        type="button"
-                        className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gray-100 hover:bg-gray-200 grid place-items-center text-base sm:text-lg"
-                        onClick={() => inc(prod.id)}
-                      >
-                        +
-                      </button>
-                    </div>
-
-                    {qtty > 0 && (
-                      <div className="text-[11px] sm:text-sm text-gray-700 text-center">
-                        Subtotal: <b>$ {fmt(qtty * effPrice)}</b>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* Totales */}
-      <section className="max-w-3xl ml-auto space-y-1">
-        <div className="flex items-center justify-between text-sm text-gray-600">
-          <span>Subtotal</span>
-          <span>$ {fmt(subtotal)}</span>
-        </div>
-        
-        {/* 🛑 MENSAJE DE ADVERTENCIA B2B (MOQ) */}
-        {isBelowMOQ && (
-          <div className="p-2 mb-2 bg-red-100 border border-red-400 rounded-lg text-red-800 text-sm font-medium">
-            🚨 **Mínimo PRO:** Subtotal de **$ {fmt(subtotal)}** es menor a la compra mínima de **$ {fmt(MIN_ORDER_RESTAURANT)}** para restaurantes.
+        <div className="absolute left-1/2 bottom-0 transform -translate-x-1/2 translate-y-1/2 z-10">
+          <div 
+            onClick={() => navigate('/')} 
+            className="w-24 h-24 sm:w-32 sm:h-32 rounded-[2rem] border-4 border-white shadow-xl overflow-hidden bg-white cursor-pointer hover:scale-105 transition-transform duration-300"
+          >
+            <img src={perfilUrl} alt="Logo Fruver" className="w-full h-full object-cover" />
           </div>
-        )}
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-6 space-y-8">
         
-        {deliveryPref?.modo === "Te lo llevamos" && (
-          <div className="flex items-center justify-between text-sm text-gray-600">
-            <span>
-              Domicilio
-              {deliveryPref?.barrioName ? ` · ${deliveryPref.barrioName}` : ""}
-            </span>
-            <span>$ {fmt(deliveryFee)}</span>
-          </div>
-        )}
-        <div className="flex items-center justify-between pt-1 border-t">
-          <span className="text-sm text-gray-700">Total</span>
-          <span className="text-lg font-bold">$ {fmt(total)}</span>
-        </div>
-      </section>
+{/* ====== INFO DE LA TIENDA (DISEÑO PREMIUM) ====== */}
+<div className="max-w-7xl mx-auto px-6 pt-2 pb-8 text-center flex flex-col items-center">
+  <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight">
+    Más Campo • Mercado
+  </h1>
+  
+  {/* ESTA ES LA FRANJA QUE PEDISTE (Estilo Rappi/UberEats) */}
+  <div className="flex flex-wrap items-center justify-center gap-3 mt-4 text-xs sm:text-sm font-bold uppercase tracking-wider text-gray-500">
+    <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-full border border-gray-100 shadow-sm">
+      <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+      </svg>
+      <span>4.9 Excelente</span>
+    </div>
+    
+    <span className="hidden sm:block text-gray-300">•</span>
+    
+    <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-full border border-gray-100 shadow-sm">
+      <span>🛵</span>
+      <span>20 - 35 MIN</span>
+    </div>
 
-      {/* CTA */}
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => setCheckoutOpen(true)}
-          // 🛑 RESTRICCIÓN DEL BOTÓN POR COMPRA MÍNIMA
-          disabled={saving || items.length === 0 || isBelowMOQ}
-          className="px-5 py-3 rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50"
-        >
-          {saving ? "Guardando…" : "Confirmar pedido fruver"}
-        </button>
-      </div>
+    <span className="hidden sm:block text-gray-300">•</span>
 
-      {/* Modal de entrega */}
-      <DeliveryPrefModal
-        open={showDeliveryModal}
-        onSubmit={handleDeliveryPrefSubmit}
-        initialPref={deliveryPref || undefined}
-        zones={deliveryZones}
-      />
+    <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-full border border-gray-100 shadow-sm">
+      <span>📍</span>
+      <span>Manizales</span>
+    </div>
+  </div>
 
-      {/* Modal de pago/datos */}
-      {checkoutOpen && (
-        <PagoModal
-          open={checkoutOpen}
-          onClose={() => setCheckoutOpen(false)}
-          onConfirm={confirmFruverOrder}
-          total={total}
-          // 🛑 PASAMOS DATA B2B AL MODAL DE PAGO
-          role={role} 
-          userDoc={userDoc}
-        />
-      )}
+  {/* BOTÓN DE ENTREGA (DINÁMICO) */}
+  <div className="mt-6">
+    <button
+      onClick={() => setShowDeliveryModal(true)}
+      className="text-xs font-bold px-5 py-2.5 rounded-xl bg-orange-50 text-orange-700 border border-orange-100 hover:bg-orange-100 transition-all shadow-sm"
+    >
+      {deliveryPref 
+        ? `${deliveryPref.modo} · ${deliveryPref.barrioName || 'Manizales'} · Cambiar` 
+        : "📍 Elegir entrega"}
+    </button>
+  </div>
+</div>
 
-      {/* Modal de confirmación */}
-      {confirmOpen && <PedidoModal open={confirmOpen} onClose={() => setConfirmOpen(false)} />}
-    </div>
-  );
+        {/* BUSCADOR */}
+        <div className="relative max-w-2xl mx-auto">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar en el mercado..."
+            className="w-full border-none shadow-sm bg-white rounded-2xl pl-12 pr-10 py-4 outline-none focus:ring-2 focus:ring-orange-200 transition-all"
+          />
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl">🔎</span>
+        </div>
+
+        {/* CONTENIDO (TEMPORADA Y CATÁLOGO) */}
+        {loadingMenu ? (
+           <div className="text-center py-20 text-gray-400 animate-pulse font-medium">Cargando mercado...</div>
+        ) : (
+          <>
+            {seasonal.length > 0 && (
+              <section className="space-y-4">
+                <h2 className="text-xl font-bold flex items-center gap-2">🔥 Recomendados</h2>
+                <div ref={viewportRef} className="overflow-x-auto scrollbar-hide mc-swipe">
+                  <div className="flex gap-4 pb-4">
+                    {seasonal.map((prod) => (
+                      <div key={prod.id} className="shrink-0 mc-snap-start" style={{ width: cardW ? `${cardW}px` : '280px' }}>
+                         <FruverItem prod={prod} qty={qty[prod.id]} inc={inc} dec={dec} setQty={setQtyClamped} role={role} discount={fruverDiscounts[prod.id]} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            <section className="space-y-4">
+              <h2 className="text-xl font-bold">Catálogo completo</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {visibleCatalog.map((prod) => (
+                  <FruverItem key={prod.id} prod={prod} qty={qty[prod.id]} inc={inc} dec={dec} setQty={setQtyClamped} role={role} discount={fruverDiscounts[prod.id]} />
+                ))}
+              </div>
+            </section>
+          </>
+        )}
+
+        {/* RESUMEN FLOTANTE O FINAL */}
+        <section className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 max-w-md ml-auto">
+          <div className="space-y-2 mb-6">
+             <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>$ {fmt(subtotal)}</span></div>
+             {isBelowMOQ && <p className="text-[10px] text-red-500 font-bold">Mínimo PRO: $ {fmt(MIN_ORDER_RESTAURANT)}</p>}
+             <div className="flex justify-between text-gray-500"><span>Domicilio</span><span>$ {fmt(deliveryFee)}</span></div>
+             <div className="flex justify-between text-xl font-black text-gray-900 border-t pt-2"><span>Total</span><span>$ {fmt(total)}</span></div>
+          </div>
+          <button
+            onClick={() => setCheckoutOpen(true)}
+            disabled={saving || items.length === 0 || isBelowMOQ}
+            className="w-full py-4 rounded-2xl bg-orange-600 text-white font-bold hover:bg-orange-700 disabled:opacity-30 transition-all shadow-md shadow-orange-200"
+          >
+            {saving ? "Procesando..." : "Confirmar Pedido"}
+          </button>
+        </section>
+      </div>
+
+      <DeliveryPrefModal open={showDeliveryModal} onSubmit={handleDeliveryPrefSubmit} initialPref={deliveryPref || undefined} zones={deliveryZones} />
+      {checkoutOpen && <PagoModal open={checkoutOpen} onClose={() => setCheckoutOpen(false)} onConfirm={confirmFruverOrder} total={total} role={role} userDoc={userDoc} />}
+      {confirmOpen && <PedidoModal open={confirmOpen} onClose={() => setConfirmOpen(false)} />}
+    </div>
+  );
+}
+
+// COMPONENTE INTERNO PARA CADA ITEM
+function FruverItem({ prod, qty, inc, dec, setQty, role, discount }) {
+  const q = Number(qty || 0);
+  const pct = Number(discount || 0);
+  const basePrice = Number(prod.price || 0);
+  const effPrice = role === 'restaurant' ? basePrice : basePrice * (1 - pct / 100);
+
+  return (
+    <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden flex flex-col h-full shadow-sm hover:shadow-md transition-shadow">
+      <div className="aspect-square bg-gray-50 p-4 relative">
+        {pct > 0 && role !== 'restaurant' && (
+          <span className="absolute top-2 right-2 bg-red-500 text-white text-[10px] font-black px-2 py-1 rounded-lg z-10">-{pct}%</span>
+        )}
+        <img src={prod.img || 'https://via.placeholder.com/200'} alt={prod.name} className="w-full h-full object-contain" />
+      </div>
+      <div className="p-4 flex flex-col flex-1">
+        <h3 className="font-bold text-gray-800 text-sm mb-1 truncate">{prod.name}</h3>
+        <p className="text-gray-400 text-xs mb-3 font-medium uppercase">{prod.unit || 'Unidad'}</p>
+        
+        <div className="mb-4">
+          <span className="text-lg font-black text-gray-900">$ {fmt(effPrice)}</span>
+          {pct > 0 && role !== 'restaurant' && (
+             <span className="text-xs text-gray-400 line-through ml-2">$ {fmt(basePrice)}</span>
+          )}
+        </div>
+
+        <div className="mt-auto flex items-center justify-between gap-2">
+          <div className="flex items-center bg-gray-100 rounded-xl p-1">
+            <button onClick={() => dec(prod.id)} className="w-8 h-8 flex items-center justify-center font-bold text-gray-600 hover:text-black">–</button>
+            <input 
+              type="number" 
+              value={q} 
+              onChange={(e) => setQty(prod.id, e.target.value)}
+              className="w-10 bg-transparent text-center text-sm font-bold outline-none" 
+            />
+            <button onClick={() => inc(prod.id)} className="w-8 h-8 flex items-center justify-center font-bold text-gray-600 hover:text-black">+</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

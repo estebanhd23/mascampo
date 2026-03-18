@@ -12,6 +12,7 @@ import PedidoModal from "../components/PedidoModal";
 import ExtrasModal from "../components/ExtrasModal";
 import DeliveryPrefModal from "../components/DeliveryPrefModal";
 import HowToBowlModal from "../components/HowToBowlModal";
+import { useNavigate } from "react-router-dom";
 
 
 // ====== helpers de horario (mismos que intranet) ======
@@ -65,6 +66,17 @@ function isOpenBySchedule(schedule = {}, d = new Date()) {
 export default function Cliente() {
   const { menu, addPedidoPendiente } = usePedido();
 
+  const navigate = useNavigate();
+
+  const coverFromDb = menu?.settings?.storeImages?.cover;
+  const portadaUrl = (coverFromDb && coverFromDb.trim() !== '') 
+    ? coverFromDb 
+    : 'https://images.unsplash.com/photo-1543353071-873f17a7a088?q=80&w=1200&auto=format&fit=crop';
+
+  const profileFromDb = menu?.settings?.storeImages?.profile;
+  const perfilUrl = (profileFromDb && profileFromDb.trim() !== '') 
+    ? profileFromDb 
+    : 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=150&auto=format&fit=crop';
   // ===== Modal educativo (una vez) =====
   const HOWTO_KEY = "mc_howto_seen_v1";
   const [howToOpen, setHowToOpen] = useState(false);
@@ -273,6 +285,7 @@ const promoMap = (menu?.settings?.promoCodes && typeof menu.settings.promoCodes 
 
 const [promoInput, setPromoInput] = useState("");
 const [appliedCode, setAppliedCode] = useState("");
+const [promoOpen, setPromoOpen] = useState(false);
 
 // % según código aplicado (case-insensitive)
 const promoPct = useMemo(() => {
@@ -459,11 +472,6 @@ const order = {
     <>
       {/* CSS local */}
       <style>{`
-        /* Oculta imágenes solo en proteínas/toppings/salsas */
-        .mc-no-photos .aspect-video { display: none !important; }
-        .mc-no-photos img { display: none !important; }
-
-        /* 👇 Arreglo visual para imágenes de BEBIDAS (sin recortes) */
         .mc-beverages img{
           width: 100%;
           height: 100%;
@@ -475,9 +483,64 @@ const order = {
         }
       `}</style>
 
-      <div className="max-w-7xl mx-auto p-6">
+      {/* PORTADA Y PERFIL */}
+<div className="relative mb-12"> 
+        <div className="w-full h-32 sm:h-40 md:h-56 bg-gray-200">
+          <img src={portadaUrl} alt="Portada de la tienda" className="w-full h-full object-cover" />
+        </div>
+
+        <div className="absolute left-1/2 bottom-0 transform -translate-x-1/2 translate-y-1/2 z-10">
+          <div 
+            onClick={() => navigate('/')} 
+            className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-white shadow-lg overflow-hidden bg-white cursor-pointer hover:scale-105 transition-transform duration-300"
+            title="Volver al inicio"
+          >
+            <img src={perfilUrl} alt="Logo de la tienda" className="w-full h-full object-cover" />
+          </div>
+        </div>
+      </div>
+
+      {/* 👇 INFO DE LA TIENDA (Estilo App de Delivery Conectada) */}
+      <div className="max-w-7xl mx-auto px-6 pt-2 pb-8 text-center flex flex-col items-center border-b border-gray-100 mb-6">
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight">Más Campo</h1>
+        
+        {/* Badges de calificación, tiempo y envío conectado a tu BD */}
+        <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-3 text-sm text-gray-700 font-medium">
+          <span className="flex items-center gap-1 bg-gray-100/80 px-2 py-1 rounded-md shadow-sm">
+            <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+            </svg>
+            4.9 (120+)
+          </span>
+          <span className="text-gray-300 hidden sm:inline">•</span>
+          
+          {/* Tiempo dinámico si lo tienes en el modal, si no, uno fijo */}
+          <span className="flex items-center gap-1 bg-gray-100/80 px-2 py-1 rounded-md shadow-sm">
+            🕒 {deliveryPref?.eta ? `${deliveryPref.eta} min` : "20 - 35 min"}
+          </span>
+          <span className="text-gray-300 hidden sm:inline">•</span>
+          
+          {/* 👇 ESTE ES EL BADGE DE ENVÍO CONECTADO A TU LÓGICA */}
+          <span 
+            onClick={() => setShowDeliveryModal(true)}
+            className="flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md shadow-sm border border-emerald-100 cursor-pointer hover:bg-emerald-100 transition-colors"
+          >
+            {deliveryPref?.modo === "Lo recojo" 
+              ? "🏪 Recoger en tienda" 
+              : deliveryPref?.barrioName 
+                ? `🛵 Envío: $${deliveryFee.toLocaleString("es-CO")}`
+                : "🛵 Seleccionar barrio"}
+          </span>
+        </div>
+
+        <p className="mt-4 text-gray-500 text-sm max-w-md leading-relaxed">
+          📍 Manizales • Bowls saludables, ingredientes frescos y lo mejor del campo directo a tu mesa.
+        </p>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-6 pb-6">
         <header className="mb-4 flex items-center justify-between gap-4">
-          <h1 className="text-2xl font-bold">Arma tu Bowl</h1>
+          <h2 className="text-2xl font-bold">Arma tu Bowl</h2>
 
           <div className="flex items-center gap-2">
             <button
@@ -487,85 +550,68 @@ const order = {
             >
               ¿Cómo armar un bowl?
             </button>
-
-            <button
-              type="button"
-              onClick={() => setShowDeliveryModal(true)}
-              className="text-xs px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
-            >
-              {deliveryPref
-                ? `${deliveryPref.modo}${
-                    deliveryPref.modo === "Te lo llevamos"
-                      ? deliveryPref.barriosName
-                        ? ` · ${deliveryPref.barriosName}`
-                        : ""
-                      : deliveryPref.eta
-                      ? ` · ${deliveryPref.eta} min`
-                      : ""
-                  } · Cambiar`
-                : "Elegir método de entrega"}
-            </button>
           </div>
         </header>
 
-        <main className="grid lg:grid-cols-3 gap-6">
-          <section className="lg:col-span-2 space-y-6">
-            {/* Bowls - grandes y centrados */}
+{/* 👇 DINÁMICO: 1 columna ancha si está vacío, 3 columnas si hay carrito */}
+        <main className={`grid gap-6 ${(current || (cart?.length || 0) > 0) ? "lg:grid-cols-3" : "lg:grid-cols-1 max-w-5xl mx-auto w-full"}`}>
+          
+          <section className={`${(current || (cart?.length || 0) > 0) ? "lg:col-span-2" : "w-full"} space-y-6`}>
+            {/* Bowls - Optimizados para Móvil y Escritorio */}
             {!current && (
-              <div className="max-w-3xl mx-auto">
-                <h2 className="font-semibold mb-3 text-center">Elige tu bowl</h2>
-                <div className="space-y-4">
+              <div className="w-full">
+                <h2 className="text-xl font-bold mb-4 text-gray-900 px-1">Nuestros Bowls</h2>
+                
+                {/* 👇 DINÁMICO: 3 columnas de bowls si no hay panel lateral, 2 si lo hay */}
+                <div className={`grid grid-cols-1 sm:grid-cols-2 ${(current || (cart?.length || 0) > 0) ? "" : "lg:grid-cols-3"} gap-4`}>
                   {(Array.isArray(menu?.bowls) ? menu.bowls : []).map((b, idx) => {
                     const pct = Number(bowlDiscounts[b?.id] || 0);
                     const effBase = Number(b?.precio || 0) * (1 - (pct / 100));
+                    
                     return (
-                      <div key={b?.id ?? `bowl-${idx}`} className="border rounded-xl p-4 bg-white shadow-sm">
-                        <div className="flex gap-4 items-center">
-                          <div className="w-28 h-24 bg-gray-100 rounded-lg overflow-hidden shrink-0 relative">
-                            {/* Badge descuento */}
-                            {pct > 0 && (
-                              <div className="absolute top-1 left-1 z-10">
-                                <span className="px-2 py-0.5 text-[10px] font-bold bg-red-600 text-white rounded">
-                                  DESCUENTO {pct}%
-                                </span>
+                      <div 
+                        key={b?.id ?? `bowl-${idx}`} 
+                        onClick={() => startBowl(b?.id)}
+                        className="group relative flex items-center justify-between gap-3 p-3.5 sm:p-4 bg-white border border-gray-100 rounded-2xl shadow-sm active:scale-[0.98] active:bg-gray-50 hover:shadow-md transition-all duration-200 cursor-pointer touch-manipulation"
+                      >
+                        <div className="flex-1 min-w-0 py-1">
+                          <h3 className="text-lg font-bold text-gray-900 truncate">
+                            {b?.name}
+                          </h3>
+                          <p className="text-sm text-gray-500 line-clamp-2 mt-0.5 leading-snug pr-2">
+                            Incluye {b?.proteinasIncluidas ?? 0} {b?.proteinasIncluidas === 1 ? 'proteína' : 'proteínas'} y {b?.toppingsIncluidos ?? 0} toppings.
+                          </p>
+                          <div className="mt-2.5 flex items-center gap-2">
+                            {pct > 0 ? (
+                              <>
+                                <span className="text-lg font-extrabold text-emerald-600">${money(effBase)}</span>
+                                <span className="text-sm text-gray-400 line-through">${money(Number(b?.precio || 0))}</span>
+                              </>
+                            ) : (
+                              <span className="text-lg font-extrabold text-gray-900">${money(Number(b?.precio || 0))}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0">
+                          <div className="w-full h-full rounded-xl overflow-hidden bg-gray-50 border border-gray-100">
+                            {b?.img ? (
+                              <img src={b.img} alt={b.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-emerald-100 bg-emerald-50">
+                                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                               </div>
                             )}
-                            {b?.img ? <img src={b.img} alt={b.name} className="w-full h-full object-cover" /> : null}
                           </div>
-                          <div className="flex-1">
-                            <div className="flex flex-wrap items-end justify-between gap-2">
-                              <div>
-                                <div className="text-lg font-semibold">{b?.name}</div>
-                                <div className="text-xs text-gray-500">
-                                  Prot. incl.: {b?.proteinasIncluidas ?? 0} • Top. incl.: {b?.toppingsIncluidos ?? 0}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm text-gray-500">Desde</div>
-                                {pct > 0 ? (
-                                  <>
-                                    <div className="text-xs text-gray-400 line-through">
-                                      ${money(Number(b?.precio || 0))}
-                                    </div>
-                                    <div className="text-xl font-bold">
-                                      ${money(effBase)}
-                                    </div>
-                                  </>
-                                ) : (
-                                  <div className="text-xl font-bold">
-                                    ${money(Number(b?.precio || 0))}
-                                  </div>
-                                )}
-                              </div>
+                          {pct > 0 && (
+                            <div className="absolute -top-2 -left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-sm z-10 border-2 border-white">
+                              -{pct}%
                             </div>
-                            <div className="mt-3">
-                              <button
-                                className="w-full sm:w-auto px-5 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700"
-                                onClick={() => startBowl(b?.id)}
-                              >
-                                Elegir
-                              </button>
-                            </div>
+                          )}
+                          <div className="absolute -bottom-2 -right-2 bg-white text-emerald-600 w-8 h-8 flex items-center justify-center rounded-full shadow-md z-10 border border-gray-100">
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" />
+                            </svg>
                           </div>
                         </div>
                       </div>
@@ -595,7 +641,7 @@ const order = {
                     </div>
                   </button>
                   {openKey === "proteina" && (
-                    <div className="p-3 mc-no-photos">
+                    <div className="p-3">
                       <ProteinSelector
                         current={current}
                         setCurrent={setCurrent}
@@ -625,7 +671,7 @@ const order = {
                       </div>
                     </button>
                     {openKey === "topping" && (
-                      <div className="p-3 mc-no-photos">
+                      <div className="p-3">
                         <ToppingSelector
                           current={current}
                           setCurrent={setCurrent}
@@ -654,7 +700,7 @@ const order = {
                       </div>
                     </button>
                     {openKey === "salsa" && (
-                      <div className="p-3 mc-no-photos">
+                      <div className="p-3">
                         <SauceSelector current={current} setCurrent={setCurrent} menu={menu} />
                       </div>
                     )}
@@ -737,33 +783,34 @@ const order = {
 
 
                 {/* Totales */}
+                {/* Totales */}
                 <div className="space-y-1">
-  <div className="flex justify-between items-center text-sm text-gray-600">
-    <span>Subtotal</span>
-    <span>${fmt(displaySubtotal)}</span>
-  </div>
+                  <div className="flex justify-between items-center text-sm text-gray-600">
+                    <span>Subtotal</span>
+                    <span>${fmt(displaySubtotal)}</span>
+                  </div>
 
-  {promoDiscount > 0 && (
-    <div className="flex justify-between items-center text-sm text-red-600">
-      <span>Promo {appliedCode ? `(${appliedCode} · ${promoPct}%)` : ""}</span>
-      <span>- ${fmt(promoDiscount)}</span>
-    </div>
-  )}
+                  {promoDiscount > 0 && (
+                    <div className="flex justify-between items-center text-sm text-red-600">
+                      <span>Promo {appliedCode ? `(${appliedCode} · ${promoPct}%)` : ""}</span>
+                      <span>- ${fmt(promoDiscount)}</span>
+                    </div>
+                  )}
 
-  {deliveryFee > 0 && (
-    <div className="flex justify-between items-center text-sm text-gray-600">
-      <span>
-        Domicilio {deliveryPref?.barriosName ? `(${deliveryPref.barriosName})` : ""}
-      </span>
-      <span>${fmt(deliveryFee)}</span>
-    </div>
-  )}
+                  {deliveryFee > 0 && (
+                    <div className="flex justify-between items-center text-sm text-gray-600">
+                      <span>
+                        Domicilio {deliveryPref?.barrioName ? `(${deliveryPref.barrioName})` : ""}
+                      </span>
+                      <span>${fmt(deliveryFee)}</span>
+                    </div>
+                  )}
 
-  <div className="flex justify-between items-center pt-1 border-t">
-    <div className="text-sm text-gray-600">Total</div>
-    <div className="font-bold">${fmt(displayTotal)}</div>
-  </div>
-</div>
+                  <div className="flex justify-between items-center pt-1 border-t">
+                    <div className="text-sm text-gray-600">Total</div>
+                    <div className="font-bold">${fmt(displayTotal)}</div>
+                  </div>
+                </div>
 
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
@@ -792,90 +839,101 @@ const order = {
                 </div>
               </div>
             )}
-          </section>
 
-          {/* Código promocional (visible si hay bowl en curso o items en el carrito) */}
-{(current || (cart?.length || 0) > 0) && (
-  <div className="border rounded-lg overflow-hidden">
-    <div className="px-4 py-3 bg-gray-50 font-medium">Código promocional</div>
-    <div className="p-3 flex gap-2 flex-col sm:flex-row">
-      <input
-        className="flex-1 border rounded-lg p-2 uppercase"
-        placeholder="INGRESA TU CÓDIGO"
-        value={promoInput}
-        onChange={(e) => setPromoInput(e.target.value)}
-        disabled={!!appliedCode}
-      />
-      {!appliedCode ? (
-        <button
-          onClick={applyPromo}
-          className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
-        >
-          Aplicar
-        </button>
-      ) : (
-        <button
-          onClick={clearPromo}
-          className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
-        >
-          Quitar {appliedCode}
-        </button>
-      )}
-    </div>
-  </div>
-)}
-
-
-          {/* Resumen lateral solo cuando hay algo */}
-          <aside className="p-4 border rounded h-fit sticky top-4 hidden lg:block">
+            {/* 👇 CÓDIGO PROMOCIONAL: Estilo Desplegable y sutil */}
             {(current || (cart?.length || 0) > 0) && (
-              <>
-                <PedidoResumen cart={cart} current={current} currentPrice={currentPrice} />
-<div className="mt-2 text-sm text-gray-600 space-y-0.5">
-  <div>Subtotal: ${fmt(displaySubtotal)}</div>
-  {promoDiscount > 0 && (
-    <div className="text-red-600">Promo {appliedCode ? `(${appliedCode} · ${promoPct}%)` : ""}: - ${fmt(promoDiscount)}</div>
-  )}
-  {deliveryFee > 0 && <div>Domicilio: ${fmt(deliveryFee)}</div>}
-  <div><b>Total: ${fmt(displayTotal)}</b></div>
-</div>
-
+              <div className="border border-gray-100 rounded-xl bg-white shadow-sm overflow-hidden mt-4">
                 <button
-                  disabled={(cart?.length || 0) === 0}
-                  className="mt-3 w-full px-3 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
-                  onClick={() => setCheckoutOpen(true)}
+                  type="button"
+                  onClick={() => setPromoOpen(!promoOpen)}
+                  className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 transition-colors"
                 >
-                  Ir a pagar
+                  <div className="flex items-center gap-3">
+                    <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                    <span className="font-medium text-gray-700">
+                      {appliedCode ? `Código aplicado: ${appliedCode}` : "¿Tienes un código promocional?"}
+                    </span>
+                  </div>
+                  <span className="text-gray-400 text-xl leading-none font-light">
+                    {promoOpen ? "−" : "+"}
+                  </span>
                 </button>
-              </>
-            )}
-          </aside>
-        </main>
 
-        {/* Resumen en móvil */}
-        <div className="lg:hidden mt-6">
-          {(current || (cart?.length || 0) > 0) && (
-            <>
-              <PedidoResumen cart={cart} current={current} currentPrice={currentPrice} />
-              <div className="mt-2 text-sm text-gray-600">
-                Subtotal: ${fmt(displaySubtotal)}
-                {deliveryFee > 0 && (
-                  <>
-                    {" "}
-                    · Domicilio: ${fmt(deliveryFee)} · <b>Total: ${fmt(displayTotal)}</b>
-                  </>
+                {promoOpen && (
+                  <div className="p-4 border-t border-gray-100 bg-gray-50/50">
+                    <div className="flex gap-2 flex-col sm:flex-row">
+                      <input
+                        className="flex-1 border border-gray-300 rounded-lg p-2.5 uppercase focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all bg-white"
+                        placeholder="INGRESA TU CÓDIGO"
+                        value={promoInput}
+                        onChange={(e) => setPromoInput(e.target.value)}
+                        disabled={!!appliedCode}
+                      />
+                      {!appliedCode ? (
+                        <button
+                          onClick={applyPromo}
+                          className="px-6 py-2.5 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 transition-colors shadow-sm"
+                        >
+                          Aplicar
+                        </button>
+                      ) : (
+                        <button
+                          onClick={clearPromo}
+                          className="px-6 py-2.5 rounded-lg border border-gray-300 hover:bg-white text-gray-600 font-medium transition-colors bg-white"
+                        >
+                          Quitar
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
+            )}
+
+          </section> {/* Fin de la columna izquierda */}
+
+          {/* 👇 RESUMEN LATERAL (TU PEDIDO) - Panel Premium para PC */}
+          {(current || (cart?.length || 0) > 0) && (
+            <aside className="p-5 border border-gray-100 bg-white rounded-xl h-fit sticky top-4 hidden lg:block shadow-sm">
+              <PedidoResumen cart={cart} current={current} currentPrice={currentPrice} />
+              
+              <div className="mt-4 pt-4 border-t border-gray-100 text-sm text-gray-600 space-y-2">
+                <div className="flex justify-between">
+                  <span>Subtotal</span>
+                  <span className="font-medium">${fmt(displaySubtotal)}</span>
+                </div>
+                {promoDiscount > 0 && (
+                  <div className="flex justify-between text-emerald-600 font-medium">
+                    <span>Promo {appliedCode ? `(${appliedCode})` : ""}</span>
+                    <span>- ${fmt(promoDiscount)}</span>
+                  </div>
+                )}
+                {deliveryFee > 0 && (
+                  <div className="flex justify-between">
+                    <span>Domicilio</span>
+                    <span className="font-medium">${fmt(deliveryFee)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-3 mt-1 border-t border-gray-100">
+                  <span className="text-base text-gray-900 font-bold">Total</span>
+                  <span className="text-lg font-bold text-emerald-600">${fmt(displayTotal)}</span>
+                </div>
+              </div>
+
               <button
                 disabled={(cart?.length || 0) === 0}
-                className="mt-3 w-full px-3 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+                className="mt-6 w-full px-4 py-3 bg-emerald-600 text-white font-bold rounded-lg disabled:opacity-50 disabled:bg-gray-400 hover:bg-emerald-700 transition-colors shadow-md"
                 onClick={() => setCheckoutOpen(true)}
               >
                 Ir a pagar
               </button>
-            </>
+            </aside>
           )}
-        </div>
+        </main>
+
+        
 
         {/* Modales */}
         {checkoutOpen && (
