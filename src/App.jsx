@@ -3,6 +3,7 @@ import React from 'react';
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import LoaderOverlay from './components/LoaderOverlay';
+import logoMasCampo from "../src/icon/logo.png"
 
 
 import HomeSplit from "./pages/HomeSplit";
@@ -27,6 +28,7 @@ import Parfaits from "./pages/Parfaits.jsx"
 
 function Shell({ children }) {
   // ASEGÚRATE DE INCLUIR 'role'
+  const { loadingMenu} = usePedido();
   const { user, role, /* logout, */ menu } = usePedido();
 
   const [showLoader, setShowLoader] = React.useState(true);
@@ -124,7 +126,10 @@ function Shell({ children }) {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Loader overlay */}
-      <LoaderOverlay show={showLoader || !menu} logoUrl={menu?.logoUrl || ''} />
+      <LoaderOverlay 
+  show={loadingMenu} 
+  logoUrl={logoMasCampo} 
+/>
 
 
       <main className="flex-1">{children}</main>

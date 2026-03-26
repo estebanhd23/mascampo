@@ -8,11 +8,11 @@ export default function Footer({ showIntranetLink }) {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="w-full border-t border-gray-200/60 bg-transparent mt-auto">
+    <footer className="w-full border-t bg-[#F0F1F4]  mt-auto">
       <div className="max-w-5xl mx-auto px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
         
         {/* Marca y Copyright */}
-        <div className="text-sm text-gray-400 font-medium tracking-wide">
+        <div className="text-sm text-gray-900 font-medium tracking-wide">
           © {year} Más Campo
         </div>
 

@@ -17,7 +17,7 @@ import {
 } from '../services/firestore';
 
 import { db } from '../firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, arrayUnion, collection, addDoc} from 'firebase/firestore';
 
 const PedidoContext = createContext(null);
 export function usePedido() { return useContext(PedidoContext); }
@@ -153,7 +153,23 @@ export function PedidoProvider({ children }) {
   // Métodos Globales
   const login = (email, password) => signInWithEmailAndPassword(auth, email, password);
   const logout = () => signOut(auth);
-  const addPedidoPendiente = (order) => addOrder({ ...order, userId: user?.uid });
+  const addPedidoPendiente = async (order) => {
+  try {
+    const orderData = { 
+      ...order, 
+      userId: user?.uid || "invitado",
+      createdAt: new Date().toISOString()
+    };
+
+    // 🌟 EL ÚNICO CAMBIO: Cambiamos "pedidos" por "orders"
+    const pedidosRef = collection(db, "orders"); 
+    await addDoc(pedidosRef, orderData);
+
+  } catch (error) {
+    console.error("Error detallado al guardar pedido:", error);
+    throw error; 
+  }
+};
   const updatePedidoStatus = fbUpdateOrderStatus;
   const completePedido = fbCompleteOrder;
 

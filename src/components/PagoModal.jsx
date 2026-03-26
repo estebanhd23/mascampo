@@ -170,7 +170,7 @@ export default function PagoModal({ open, onClose, onConfirm, total }) {
                         </button>
                         <button
                             type="submit"
-                            className="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700"
+                            className="px-4 py-2 rounded bg-green-500 text-white hover:bg-green-400"
                         >
                             Enviar pedido
                         </button>

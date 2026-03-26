@@ -113,12 +113,41 @@ export default function Fruver() {
     });
   }, [catalog, qty, fruverDiscounts, role]); 
 
+ // ====== 1. SUBTOTAL Y DOMICILIO ======
   const subtotal = useMemo(() => items.reduce((a, x) => a + x.subtotal, 0), [items]);
   const deliveryFee = useMemo(() => {
     if (deliveryPref?.modo !== "Te lo llevamos") return 0;
     return Number(deliveryPref?.fee || 0);
   }, [deliveryPref]);
-  const total = subtotal + deliveryFee;
+
+  // ====== 2. CÓDIGO PROMOCIONAL (Se calcula antes del Total) ======
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState(null);
+
+  const applyPromo = () => {
+    const codeUpper = promoInput.trim().toUpperCase();
+    const validCodes = menu?.settings?.promoCodes || [];
+    const found = validCodes.find(c => c.code === codeUpper && c.active !== false);
+
+    if (found) {
+      if (subtotal >= (found.minAmount || 0)) {
+        setAppliedPromo({ code: found.code, discountPct: found.discount, minAmount: found.minAmount || 0 });
+        alert(`¡Código aplicado! ${found.discount}% de descuento.`);
+      } else {
+        alert(`Este código requiere un pedido mínimo de $${(found.minAmount || 0).toLocaleString("es-CO")}`);
+      }
+    } else {
+      alert("Código inválido, inactivo o expirado.");
+      setAppliedPromo(null);
+    }
+  };
+
+  const discountAmount = (appliedPromo && subtotal >= appliedPromo.minAmount) 
+    ? (subtotal * (appliedPromo.discountPct / 100)) 
+    : 0;
+
+  // ====== 3. TOTAL FINAL ======
+  const total = subtotal - discountAmount + deliveryFee;
   const isBelowMOQ = useMemo(() => role === 'restaurant' && subtotal < MIN_ORDER_RESTAURANT, [role, subtotal]);
   
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -129,15 +158,33 @@ export default function Fruver() {
     if (items.length === 0 || isBelowMOQ) return;
     try {
       setSaving(true);
-      const order = {
-        type: "fruver",
-        items: items,
-        subtotal, deliveryFee, total,
-        entrega: { ...form, ...(deliveryPref || {}) },
-        status: "Pendiente",
-        createdAt: new Date().toISOString(),
-        paymentMethod: form.metodoPago, 
-      };
+    const order = {
+  type: "fruver", // Agregamos el tipo para que la Intranet sepa cómo mostrarlo
+  items: items.map(it => ({
+    id: String(it.id || ''),
+    name: String(it.name || ''),
+    qty: Number(it.qty || 0),
+    price: Number(it.price || 0),
+    lineTotal: Number(it.lineTotal || 0),
+    unit: String(it.unit || '')
+  })),
+  // Forzamos conversión a número para evitar errores en Firestore
+  subtotal: Number(subtotal || 0), 
+  deliveryFee: Number(deliveryFee || 0), 
+  total: Number(total || 0),
+  entrega: { 
+    ...form, 
+    ...(deliveryPref || {}),
+    barrio: form.barrio || deliveryPref?.barrio || "No especificado"
+  },
+  status: "Pendiente",
+  createdAt: new Date().toISOString(),
+  paymentMethod: form.metodoPago || "No especificado", 
+  pricing: { 
+    promoCode: String(appliedPromo?.code || ""), 
+    promoDiscount: Number(discountAmount || 0) 
+  },
+};
       await addPedidoPendiente(order);
       setQty({});
       setCheckoutOpen(false);
@@ -152,7 +199,16 @@ export default function Fruver() {
         .mc-swipe { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
         .mc-snap-start { scroll-snap-align: start; }
       `}</style>
-      
+      {/* BOTÓN FLOTANTE ATRÁS */}
+<button
+  onClick={() => navigate('/')}
+  className="absolute top-4 left-4 sm:top-6 sm:left-6 z-50 w-10 h-10 sm:w-12 sm:h-12 bg-white/90 backdrop-blur-md border border-white/50 rounded-full shadow-lg flex items-center justify-center text-gray-800 hover:bg-white hover:scale-105 transition-all active:scale-95"
+  aria-label="Volver al inicio"
+>
+  <svg className="w-5 h-5 sm:w-6 sm:h-6 pr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+  </svg>
+</button>
       {/* ====== HEADER PREMIUM (PORTADA + PERFIL) ====== */}
       <div className="relative mb-16"> 
         <div className="w-full h-32 sm:h-48 bg-gray-200">
@@ -163,9 +219,10 @@ export default function Fruver() {
         <div className="absolute left-1/2 bottom-0 transform -translate-x-1/2 translate-y-1/2 z-10">
           <div 
             onClick={() => navigate('/')} 
-            className="w-24 h-24 sm:w-32 sm:h-32 rounded-[2rem] border-4 border-white shadow-xl overflow-hidden bg-white cursor-pointer hover:scale-105 transition-transform duration-300"
+            className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-white shadow-lg overflow-hidden bg-white cursor-pointer hover:scale-105 transition-transform duration-300"
+            title="Volver al inicio"
           >
-            <img src={perfilUrl} alt="Logo Fruver" className="w-full h-full object-cover" />
+            <img src={perfilUrl} alt="Logo de la tienda" className="w-full h-full object-cover" />
           </div>
         </div>
       </div>
@@ -173,46 +230,57 @@ export default function Fruver() {
       <div className="max-w-7xl mx-auto px-6 space-y-8">
         
 {/* ====== INFO DE LA TIENDA (DISEÑO PREMIUM) ====== */}
-<div className="max-w-7xl mx-auto px-6 pt-2 pb-8 text-center flex flex-col items-center">
-  <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight">
-    Más Campo • Mercado
-  </h1>
+{/* 👇 INFO DE LA TIENDA (Estilo Minimalista Rappi) */}
+<div className="max-w-7xl mx-auto px-6 pt-8 pb-10 text-center flex flex-col items-center border-b border-gray-100 mb-8">
   
-  {/* ESTA ES LA FRANJA QUE PEDISTE (Estilo Rappi/UberEats) */}
-  <div className="flex flex-wrap items-center justify-center gap-3 mt-4 text-xs sm:text-sm font-bold uppercase tracking-wider text-gray-500">
-    <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-full border border-gray-100 shadow-sm">
-      <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
+  {/* Nombre con tipografía elegante y no tan "pesada" */}
+  <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Mercado</h1>
+  
+  {/* Línea de Meta-información (Estilo Pill de Rappi) */}
+  <div className="flex flex-wrap items-center justify-center gap-4 mt-4 text-[13px] text-gray-500">
+    
+    {/* Calificación */}
+    <div className="flex items-center gap-1.5 py-1 px-2 hover:bg-gray-50 rounded-lg transition-colors">
+      <svg className="w-3.5 h-3.5 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
+        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
       </svg>
-      <span>4.9 Excelente</span>
-    </div>
-    
-    <span className="hidden sm:block text-gray-300">•</span>
-    
-    <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-full border border-gray-100 shadow-sm">
-      <span>🛵</span>
-      <span>20 - 35 MIN</span>
+      <span className="font-semibold text-gray-700">4.9</span>
+      <span className="text-gray-400">(120+)</span>
     </div>
 
-    <span className="hidden sm:block text-gray-300">•</span>
+    <span className="w-1 h-1 bg-gray-300 rounded-full hidden sm:inline" />
 
-    <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-full border border-gray-100 shadow-sm">
-      <span>📍</span>
-      <span>Manizales</span>
+    {/* Tiempo de entrega (Sin emoji, solo texto y gris) */}
+    <div className="py-1 px-2">
+      <span className="text-gray-400 mr-1 font-light">Entrega en</span>
+      <span className="font-medium text-gray-700">
+        {deliveryPref?.eta ? `${deliveryPref.eta} min` : "20-35 min"}
+      </span>
     </div>
-  </div>
 
-  {/* BOTÓN DE ENTREGA (DINÁMICO) */}
-  <div className="mt-6">
-    <button
+    <span className="w-1 h-1 bg-gray-300 rounded-full hidden sm:inline" />
+
+    {/* Costo de Envío / Selección de Barrio */}
+    <button 
       onClick={() => setShowDeliveryModal(true)}
-      className="text-xs font-bold px-5 py-2.5 rounded-xl bg-orange-50 text-orange-700 border border-orange-100 hover:bg-orange-100 transition-all shadow-sm"
+      className="flex items-center gap-1.5 py-1 px-2 text-blue-500 font-medium hover:underline decoration-blue-200 underline-offset-4"
     >
-      {deliveryPref 
-        ? `${deliveryPref.modo} · ${deliveryPref.barrioName || 'Manizales'} · Cambiar` 
-        : "📍 Elegir entrega"}
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+      {deliveryPref?.modo === "Lo recojo" 
+        ? "Recoger en tienda" 
+        : deliveryPref?.barrioName 
+          ? `Envío $${deliveryFee.toLocaleString("es-CO")}`
+          : "Seleccionar entrega"}
     </button>
   </div>
+
+  {/* Descripción en gris suave y letra ligera */}
+  <p className="mt-5 text-gray-400 text-[13px] max-w-sm font-light leading-relaxed">
+    Bowls saludables e ingredientes frescos directo a tu mesa en Manizales.
+  </p>
 </div>
 
         {/* BUSCADOR */}
@@ -223,7 +291,6 @@ export default function Fruver() {
             placeholder="Buscar en el mercado..."
             className="w-full border-none shadow-sm bg-white rounded-2xl pl-12 pr-10 py-4 outline-none focus:ring-2 focus:ring-orange-200 transition-all"
           />
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl">🔎</span>
         </div>
 
         {/* CONTENIDO (TEMPORADA Y CATÁLOGO) */}
@@ -233,7 +300,7 @@ export default function Fruver() {
           <>
             {seasonal.length > 0 && (
               <section className="space-y-4">
-                <h2 className="text-xl font-bold flex items-center gap-2">🔥 Recomendados</h2>
+                <h2 className="text-xl font-semi-bold flex items-center gap-2">Recomendados</h2>
                 <div ref={viewportRef} className="overflow-x-auto scrollbar-hide mc-swipe">
                   <div className="flex gap-4 pb-4">
                     {seasonal.map((prod) => (
@@ -247,7 +314,7 @@ export default function Fruver() {
             )}
 
             <section className="space-y-4">
-              <h2 className="text-xl font-bold">Catálogo completo</h2>
+              <h2 className="text-xl font-semi-bold">Catálogo completo</h2>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {visibleCatalog.map((prod) => (
                   <FruverItem key={prod.id} prod={prod} qty={qty[prod.id]} inc={inc} dec={dec} setQty={setQtyClamped} role={role} discount={fruverDiscounts[prod.id]} />
@@ -257,18 +324,46 @@ export default function Fruver() {
           </>
         )}
 
-        {/* RESUMEN FLOTANTE O FINAL */}
+       {/* RESUMEN FLOTANTE O FINAL */}
         <section className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 max-w-md ml-auto">
+          
+          {/* CÓDIGO PROMOCIONAL */}
+          <div className="flex gap-2 mb-6">
+            <input 
+              type="text" 
+              placeholder="Código Promo" 
+              value={promoInput}
+              onChange={(e) => setPromoInput(e.target.value)}
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm uppercase outline-none focus:border-orange-400"
+            />
+            <button onClick={applyPromo} className="bg-gray-900 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-black">
+              Aplicar
+            </button>
+          </div>
+
+          {/* DESGLOSE DEL COBRO */}
           <div className="space-y-2 mb-6">
              <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>$ {fmt(subtotal)}</span></div>
              {isBelowMOQ && <p className="text-[10px] text-red-500 font-bold">Mínimo PRO: $ {fmt(MIN_ORDER_RESTAURANT)}</p>}
+             
+             {/* Muestra el descuento si existe */}
+             {appliedPromo && discountAmount > 0 && (
+               <div className="flex justify-between text-emerald-600 font-bold text-sm">
+                 <span>Desc. ({appliedPromo.code})</span>
+                 <span>-$ {fmt(discountAmount)}</span>
+               </div>
+             )}
+
              <div className="flex justify-between text-gray-500"><span>Domicilio</span><span>$ {fmt(deliveryFee)}</span></div>
-             <div className="flex justify-between text-xl font-black text-gray-900 border-t pt-2"><span>Total</span><span>$ {fmt(total)}</span></div>
+             <div className="flex justify-between text-xl font-semi-bold text-gray-900 border-t pt-2 mt-2"><span>Total</span><span>$ {fmt(total)}</span></div>
           </div>
+          
           <button
-            onClick={() => setCheckoutOpen(true)}
+            onClick={() =>
+              setCheckoutOpen(true)}
+           
             disabled={saving || items.length === 0 || isBelowMOQ}
-            className="w-full py-4 rounded-2xl bg-orange-600 text-white font-bold hover:bg-orange-700 disabled:opacity-30 transition-all shadow-md shadow-orange-200"
+            className="w-full py-4 rounded-2xl bg-green-500 text-white font-bold hover:bg-green-400  transition-all shadow-md"
           >
             {saving ? "Procesando..." : "Confirmar Pedido"}
           </button>
@@ -293,7 +388,7 @@ function FruverItem({ prod, qty, inc, dec, setQty, role, discount }) {
     <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden flex flex-col h-full shadow-sm hover:shadow-md transition-shadow">
       <div className="aspect-square bg-gray-50 p-4 relative">
         {pct > 0 && role !== 'restaurant' && (
-          <span className="absolute top-2 right-2 bg-red-500 text-white text-[10px] font-black px-2 py-1 rounded-lg z-10">-{pct}%</span>
+          <span className="absolute top-2 right-2 bg-yellow-500 text-white text-[10px] font-black px-2 py-1 rounded-lg z-10">-{pct}%</span>
         )}
         <img src={prod.img || 'https://via.placeholder.com/200'} alt={prod.name} className="w-full h-full object-contain" />
       </div>
@@ -302,7 +397,7 @@ function FruverItem({ prod, qty, inc, dec, setQty, role, discount }) {
         <p className="text-gray-400 text-xs mb-3 font-medium uppercase">{prod.unit || 'Unidad'}</p>
         
         <div className="mb-4">
-          <span className="text-lg font-black text-gray-900">$ {fmt(effPrice)}</span>
+          <span className="text-lg font-semi-bold text-gray-900">$ {fmt(effPrice)}</span>
           {pct > 0 && role !== 'restaurant' && (
              <span className="text-xs text-gray-400 line-through ml-2">$ {fmt(basePrice)}</span>
           )}
@@ -310,14 +405,14 @@ function FruverItem({ prod, qty, inc, dec, setQty, role, discount }) {
 
         <div className="mt-auto flex items-center justify-between gap-2">
           <div className="flex items-center bg-gray-100 rounded-xl p-1">
-            <button onClick={() => dec(prod.id)} className="w-8 h-8 flex items-center justify-center font-bold text-gray-600 hover:text-black">–</button>
+            <button onClick={() => dec(prod.id)} className="w-8 h-8 flex items-center justify-center font-semi-bold text-gray-600 hover:text-black">–</button>
             <input 
               type="number" 
               value={q} 
               onChange={(e) => setQty(prod.id, e.target.value)}
-              className="w-10 bg-transparent text-center text-sm font-bold outline-none" 
+              className="w-10 bg-transparent text-center text-sm font-semi-bold outline-none" 
             />
-            <button onClick={() => inc(prod.id)} className="w-8 h-8 flex items-center justify-center font-bold text-gray-600 hover:text-black">+</button>
+            <button onClick={() => inc(prod.id)} className="w-8 h-8 flex items-center justify-center font-semi-bold text-gray-600 hover:text-black">+</button>
           </div>
         </div>
       </div>

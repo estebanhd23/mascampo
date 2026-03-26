@@ -102,23 +102,30 @@ export default function HomeSplit() {
   const overlay = Math.max(0, Math.min(1, Number(menu?.settings?.homeOverlayOpacity ?? 0.4)));
   const headerLogo = menu?.headerLogoUrl || menu?.logoUrl || menu?.footerLogoUrl || "";
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center pb-8 font-sans">
+return (
+    <div className="min-h-screen bg-[#F0F1F4] flex flex-col items-center pb-8 font-sans">
       
-      <header className="w-full max-w-5xl mx-auto px-4 pt-10 pb-6 flex flex-col items-center justify-center relative z-10">
-        <div className="w-24 h-24 sm:w-32 sm:h-32 bg-white rounded-[2rem] shadow-sm border border-gray-100 flex items-center justify-center overflow-hidden mb-4 transform hover:scale-105 transition-transform duration-500">
+      {/* HEADER LOGO (INTACTO) */}
+      <header className="w-full max-w-5xl mx-auto px-4 pt-8 pb-4 sm:pt-10 sm:pb-6 flex flex-col items-center justify-center relative z-10">
+        <div className="w-20 h-20 sm:w-32 sm:h-32 bg-white rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border border-gray-100 flex items-center justify-center overflow-hidden mb-2 transform hover:scale-105 transition-transform duration-500">
           {headerLogo ? (
             <img src={headerLogo} alt="Logo" className="w-full h-full object-cover" />
           ) : (
-            <div className="text-emerald-700 font-bold text-xl text-center leading-tight">
+            <div className="text-emerald-700 font-bold text-lg sm:text-xl text-center leading-tight">
               Más<br/>Campo
             </div>
           )}
         </div>
+        <div className="max-w-xl mx-auto px-6 text-center mb-10">
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Más Campo</h1>
+        <p className="mt-2 text-gray-900 text-[13px] font-bold">
+          Bowls | Parfait's | Patacrunch <br></br>  | Frutas y verduras
+        </p>
+      </div>
       </header>
 
-      {/* Grid de 3 columnas */}
-      <div className="w-full max-w-6xl grid grid-cols-3 gap-2 sm:gap-6 px-3 sm:px-6 relative flex-1">
+      {/* GRID "HERO + CUADRÍCULA" */}
+      <div className="w-full max-w-6xl grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 px-4 sm:px-6 relative flex-1">
         
         <div className="contents">
           <StoreHoursGate
@@ -134,64 +141,47 @@ export default function HomeSplit() {
         {/* --- BOWLS --- */}
         <Link
           to="/cliente"
-          className={`relative rounded-2xl sm:rounded-3xl overflow-hidden group block shadow-md hover:shadow-xl transition-all duration-300 ${!isStoreOpen ? "grayscale pointer-events-none opacity-80" : "hover:-translate-y-1"}`}
+          className={`col-span-1 sm:col-span-1 bg-white rounded-3xl overflow-hidden group block  transition-all duration-300 flex flex-col p-3 ${!isStoreOpen ? "grayscale pointer-events-none opacity-80" : "hover:-translate-y-1"}`}
         >
+          {/* h-32 en móviles, h-52 en pantallas grandes */}
           <div
-            className={`absolute inset-0 ${urlGastro ? "" : "bg-emerald-600"}`}
+            className={`w-full h-32 sm:h-52 rounded-2xl ${urlGastro ? "" : "bg-emerald-600"}`}
             style={urlGastro ? { backgroundImage: `url(${urlGastro})`, backgroundSize: "cover", backgroundPosition: "center" } : {}}
           />
-          <div className="absolute inset-0 bg-black" style={{ opacity: overlay }} />
-          
-          <div className="relative z-10 h-full min-h-[160px] sm:min-h-[350px] flex flex-col items-center justify-center text-center p-2 sm:p-8">
-            <h2 className="text-white text-[11px] sm:text-4xl font-black uppercase tracking-tighter mb-2 sm:mb-4">Bowls</h2>
-            <p className="hidden sm:block text-white/90 text-sm mb-6">Arma tu bowl saludable.</p>
-            <span className="inline-flex items-center justify-center px-2 py-1.5 sm:px-8 sm:py-3.5 rounded-lg sm:rounded-full bg-emerald-500 text-white font-bold text-[9px] sm:text-base transition-colors hover:bg-emerald-400 shadow-sm border border-emerald-400/30">
-              PEDIR
-            </span>
+          <div className="flex items-center justify-center text-center p-2 flex-1">
+            <h2 className="text-gray-900 text-xs sm:text-xl font-bold uppercase tracking-tight">Bowls</h2>
           </div>
         </Link>
 
         {/* --- PARFAITS --- */}
         <Link
           to="/parfaits"
-          className={`relative rounded-2xl sm:rounded-3xl overflow-hidden group block shadow-md hover:shadow-xl transition-all duration-300 ${!isStoreOpen ? "grayscale pointer-events-none opacity-80" : "hover:-translate-y-1"}`}
+          className={`bg-white rounded-3xl overflow-hidden group block  transition-all duration-300 flex flex-col p-3 ${!isStoreOpen ? "grayscale pointer-events-none opacity-80" : "hover:-translate-y-1"}`}
         >
           <div
-            className={`absolute inset-0 ${urlParfait ? "" : "bg-purple-600"}`}
+            className={`w-full h-32 sm:h-52 rounded-2xl ${urlParfait ? "" : "bg-purple-600"}`}
             style={urlParfait ? { backgroundImage: `url(${urlParfait})`, backgroundSize: "cover", backgroundPosition: "center" } : {}}
           />
-          <div className="absolute inset-0 bg-black" style={{ opacity: overlay }} />
-          
-          <div className="relative z-10 h-full min-h-[160px] sm:min-h-[350px] flex flex-col items-center justify-center text-center p-2 sm:p-8">
-            <h2 className="text-white text-[11px] sm:text-4xl font-black uppercase tracking-tighter mb-2 sm:mb-4">Parfaits</h2>
-            <p className="hidden sm:block text-white/90 text-sm mb-6">Yogurt y frutas frescas.</p>
-            <span className="inline-flex items-center justify-center px-2 py-1.5 sm:px-8 sm:py-3.5 rounded-lg sm:rounded-full bg-purple-500 text-white font-bold text-[9px] sm:text-base transition-colors hover:bg-purple-400 shadow-sm border border-purple-400/30">
-              ARMAR
-            </span>
+          <div className="flex items-center justify-center text-center p-2 flex-1">
+            <h2 className="text-gray-900 text-xs sm:text-xl font-bold uppercase tracking-tight">Parfaits</h2>
           </div>
         </Link>
 
-        {/* --- VERDURAS --- */}
+        {/* --- MERCADO/FRUVER --- */}
         <Link
           to="/fruver"
-          className={`relative rounded-2xl sm:rounded-3xl overflow-hidden group block shadow-md hover:shadow-xl transition-all duration-300 ${!isStoreOpen ? "grayscale pointer-events-none opacity-80" : "hover:-translate-y-1"}`}
+          className={`bg-white rounded-3xl overflow-hidden group block  transition-all duration-300 flex flex-col p-3 ${!isStoreOpen ? "grayscale pointer-events-none opacity-80" : "hover:-translate-y-1"}`}
         >
           <div
-            className={`absolute inset-0 ${urlFruver ? "" : "bg-orange-500"}`}
+            className={`w-full h-32 sm:h-52 rounded-2xl ${urlFruver ? "" : "bg-orange-500"}`}
             style={urlFruver ? { backgroundImage: `url(${urlFruver})`, backgroundSize: "cover", backgroundPosition: "center" } : {}}
           />
-          <div className="absolute inset-0 bg-black" style={{ opacity: overlay }} />
-          
-          <div className="relative z-10 h-full min-h-[160px] sm:min-h-[350px] flex flex-col items-center justify-center text-center p-2 sm:p-8">
-            <h2 className="text-white text-[11px] sm:text-4xl font-black uppercase tracking-tighter mb-2 sm:mb-4">Mercado</h2>
-            <p className="hidden sm:block text-white/90 text-sm mb-6">Del campo a tu casa.</p>
-            <span className="inline-flex items-center justify-center px-2 py-1.5 sm:px-8 sm:py-3.5 rounded-lg sm:rounded-full bg-orange-500 text-white font-bold text-[9px] sm:text-base transition-colors hover:bg-orange-400 shadow-sm border border-orange-400/30">
-              HACER
-            </span>
+          <div className="flex items-center justify-center text-center p-2 flex-1">
+            <h2 className="text-gray-900 text-xs sm:text-xl font-bold uppercase tracking-tight">Verduras</h2>
           </div>
         </Link>
 
       </div>
     </div>
   );
-}
+};

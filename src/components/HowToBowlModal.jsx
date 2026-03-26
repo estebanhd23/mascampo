@@ -118,7 +118,7 @@ export default function HowToBowlModal({ open, onClose, menu }) {
               <button
                 type="button"
                 onClick={handleClose}
-                className="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                className="px-4 py-2 rounded bg-green-500 text-white hover:bg-green-400"
               >
                 ¡Listo, a armarlo!
               </button>

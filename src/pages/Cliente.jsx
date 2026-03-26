@@ -73,9 +73,9 @@ export default function Cliente() {
     ? coverFromDb 
     : 'https://images.unsplash.com/photo-1543353071-873f17a7a088?q=80&w=1200&auto=format&fit=crop';
 
-  const profileFromDb = menu?.settings?.storeImages?.profile;
-  const perfilUrl = (profileFromDb && profileFromDb.trim() !== '') 
-    ? profileFromDb 
+  const profileGastro = menu?.settings?.storeImages?.profileGastro;
+  const perfilUrl = (profileGastro && profileGastro.trim() !== '') 
+    ? profileGastro
     : 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=150&auto=format&fit=crop';
   // ===== Modal educativo (una vez) =====
   const HOWTO_KEY = "mc_howto_seen_v1";
@@ -278,47 +278,66 @@ export default function Cliente() {
     return Number.isFinite(fee) ? fee : 0;
   }, [deliveryPref]);
 
-// === Código promocional (desde Intranet) ===
-const promoMap = (menu?.settings?.promoCodes && typeof menu.settings.promoCodes === "object")
-  ? menu.settings.promoCodes
-  : {};
+// === Código promocional (Conectado a la Intranet) ===
+  const [promoInput, setPromoInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState(null); // Ahora guarda el objeto completo
+  const [promoOpen, setPromoOpen] = useState(false);
 
-const [promoInput, setPromoInput] = useState("");
-const [appliedCode, setAppliedCode] = useState("");
-const [promoOpen, setPromoOpen] = useState(false);
+  // aplicar código
+  const applyPromo = () => {
+    const codeUpper = promoInput.trim().toUpperCase();
+    if (!codeUpper) return;
 
-// % según código aplicado (case-insensitive)
-const promoPct = useMemo(() => {
-  const key = String(appliedCode || "").trim().toUpperCase();
-  return Number(promoMap[key] || 0);
-}, [appliedCode, promoMap]);
+    // 1. Leer los códigos desde Firebase (creados en Intranet)
+    const validCodes = menu?.settings?.promoCodes || [];
+    
+    // 2. Buscar si el código existe y está activo
+    const found = validCodes.find(c => c.code === codeUpper && c.active !== false);
 
-// Descuento aplicado sobre el SUBTOTAL visible (sin domicilio)
-const promoDiscount = useMemo(() => {
-  if (!promoPct) return 0;
-  const d = Math.floor((displaySubtotal * promoPct) / 100);
-  return d > 0 ? d : 0;
-}, [displaySubtotal, promoPct]);
+    if (found) {
+      // 3. Validar el monto mínimo de compra usando displaySubtotal
+      if (displaySubtotal >= (found.minAmount || 0)) {
+        setAppliedPromo({ 
+          code: found.code, 
+          discountPct: found.discount, 
+          minAmount: found.minAmount || 0 
+        });
+        alert(`¡Código aplicado! ${found.discount}% de descuento.`);
+      } else {
+        alert(`Este código requiere un pedido mínimo de $${(found.minAmount || 0).toLocaleString("es-CO")}`);
+      }
+    } else {
+      alert("Código inválido, inactivo o expirado.");
+      setAppliedPromo(null);
+    }
+  };
 
-// Totales con descuento y domicilio
-const cartTotal    = Math.max(0, cartSubtotal - Math.floor((cartSubtotal * promoPct) / 100) + deliveryFee);
-const displayTotal = Math.max(0, displaySubtotal - promoDiscount + deliveryFee);
+  // Quitar código
+  const clearPromo = () => {
+    setAppliedPromo(null);
+    setPromoInput("");
+  };
 
-// aplicar / quitar código
-const applyPromo = () => {
-  const key = String(promoInput || "").trim().toUpperCase();
-  if (!key) return;
-  if (!promoMap[key]) {
-    alert("Código inválido o inactivo");
-    return;
-  }
-  setAppliedCode(key);
-  alert(`Código aplicado: ${key} (${promoMap[key]}%)`);
-};
-const clearPromo = () => {
-  setAppliedCode("");
-  setPromoInput("");
-};
+  // Descuento aplicado sobre el SUBTOTAL visible (sin domicilio)
+  // Automáticamente se vuelve 0 si el usuario elimina bowls y baja del mínimo
+  const promoDiscount = useMemo(() => {
+    if (appliedPromo && displaySubtotal >= appliedPromo.minAmount) {
+      return Math.floor(displaySubtotal * (appliedPromo.discountPct / 100));
+    }
+    return 0;
+  }, [displaySubtotal, appliedPromo]);
+
+  // Descuento aplicado al carrito real
+  const cartDiscount = useMemo(() => {
+    if (appliedPromo && cartSubtotal >= appliedPromo.minAmount) {
+      return Math.floor(cartSubtotal * (appliedPromo.discountPct / 100));
+    }
+    return 0;
+  }, [cartSubtotal, appliedPromo]);
+
+  // Totales con descuento y domicilio
+  const cartTotal    = Math.max(0, cartSubtotal - cartDiscount + deliveryFee);
+  const displayTotal = Math.max(0, displaySubtotal - promoDiscount + deliveryFee);
 
 
 
@@ -450,11 +469,11 @@ const order = {
   createdAt: new Date().toISOString(),
   pricing: {
     subtotal: cartSubtotalMemo,
-    promoCode: appliedCode || null,
-    promoPercent: promoPct || 0,
-    promoDiscount: Math.floor((cartSubtotalMemo * promoPct) / 100),
+    promoCode: appliedPromo?.code || null,
+    promoPercent: appliedPromo?.discountPct || 0,
+    promoDiscount: cartDiscount || 0,
     total: cartTotal,
-  },
+}
 };
 
       await addPedidoPendiente(order);
@@ -485,6 +504,16 @@ const order = {
 
       {/* PORTADA Y PERFIL */}
 <div className="relative mb-12"> 
+  {/* BOTÓN FLOTANTE ATRÁS */}
+<button
+  onClick={() => navigate('/')}
+  className="absolute top-4 left-4 sm:top-6 sm:left-6 z-50 w-10 h-10 sm:w-12 sm:h-12 bg-white/90 backdrop-blur-md border border-white/50 rounded-full shadow-lg flex items-center justify-center text-gray-800 hover:bg-white hover:scale-105 transition-all active:scale-95"
+  aria-label="Volver al inicio"
+>
+  <svg className="w-5 h-5 sm:w-6 sm:h-6 pr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+  </svg>
+</button>
         <div className="w-full h-32 sm:h-40 md:h-56 bg-gray-200">
           <img src={portadaUrl} alt="Portada de la tienda" className="w-full h-full object-cover" />
         </div>
@@ -500,47 +529,62 @@ const order = {
         </div>
       </div>
 
-      {/* 👇 INFO DE LA TIENDA (Estilo App de Delivery Conectada) */}
-      <div className="max-w-7xl mx-auto px-6 pt-2 pb-8 text-center flex flex-col items-center border-b border-gray-100 mb-6">
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight">Más Campo</h1>
-        
-        {/* Badges de calificación, tiempo y envío conectado a tu BD */}
-        <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 mt-3 text-sm text-gray-700 font-medium">
-          <span className="flex items-center gap-1 bg-gray-100/80 px-2 py-1 rounded-md shadow-sm">
-            <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-            </svg>
-            4.9 (120+)
-          </span>
-          <span className="text-gray-300 hidden sm:inline">•</span>
-          
-          {/* Tiempo dinámico si lo tienes en el modal, si no, uno fijo */}
-          <span className="flex items-center gap-1 bg-gray-100/80 px-2 py-1 rounded-md shadow-sm">
-            🕒 {deliveryPref?.eta ? `${deliveryPref.eta} min` : "20 - 35 min"}
-          </span>
-          <span className="text-gray-300 hidden sm:inline">•</span>
-          
-          {/* 👇 ESTE ES EL BADGE DE ENVÍO CONECTADO A TU LÓGICA */}
-          <span 
-            onClick={() => setShowDeliveryModal(true)}
-            className="flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md shadow-sm border border-emerald-100 cursor-pointer hover:bg-emerald-100 transition-colors"
-          >
-            {deliveryPref?.modo === "Lo recojo" 
-              ? "🏪 Recoger en tienda" 
-              : deliveryPref?.barrioName 
-                ? `🛵 Envío: $${deliveryFee.toLocaleString("es-CO")}`
-                : "🛵 Seleccionar barrio"}
-          </span>
-        </div>
+  {/* 👇 INFO DE LA TIENDA (Estilo Minimalista Rappi) */}
+<div className="max-w-7xl mx-auto px-6 pt-8 pb-10 text-center flex flex-col items-center border-b border-gray-100 mb-8">
+  
+  {/* Nombre con tipografía elegante y no tan "pesada" */}
+  <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Más Campo</h1>
+  
+  {/* Línea de Meta-información (Estilo Pill de Rappi) */}
+  <div className="flex flex-wrap items-center justify-center gap-4 mt-4 text-[13px] text-gray-500">
+    
+    {/* Calificación */}
+    <div className="flex items-center gap-1.5 py-1 px-2 hover:bg-gray-50 rounded-lg transition-colors">
+      <svg className="w-3.5 h-3.5 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
+        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+      </svg>
+      <span className="font-semibold text-gray-700">4.9</span>
+      <span className="text-gray-400">(120+)</span>
+    </div>
 
-        <p className="mt-4 text-gray-500 text-sm max-w-md leading-relaxed">
-          📍 Manizales • Bowls saludables, ingredientes frescos y lo mejor del campo directo a tu mesa.
-        </p>
-      </div>
+    <span className="w-1 h-1 bg-gray-300 rounded-full hidden sm:inline" />
+
+    {/* Tiempo de entrega (Sin emoji, solo texto y gris) */}
+    <div className="py-1 px-2">
+      <span className="text-gray-400 mr-1 font-light">Entrega en</span>
+      <span className="font-medium text-gray-700">
+        {deliveryPref?.eta ? `${deliveryPref.eta} min` : "20-35 min"}
+      </span>
+    </div>
+
+    <span className="w-1 h-1 bg-gray-300 rounded-full hidden sm:inline" />
+
+    {/* Costo de Envío / Selección de Barrio */}
+    <button 
+      onClick={() => setShowDeliveryModal(true)}
+      className="flex items-center gap-1.5 py-1 px-2 text-blue-500 font-medium hover:underline decoration-blue-200 underline-offset-4"
+    >
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+      {deliveryPref?.modo === "Lo recojo" 
+        ? "Recoger en tienda" 
+        : deliveryPref?.barrioName 
+          ? `Envío $${deliveryFee.toLocaleString("es-CO")}`
+          : "Seleccionar entrega"}
+    </button>
+  </div>
+
+  {/* Descripción en gris suave y letra ligera */}
+  <p className="mt-5 text-gray-400 text-[13px] max-w-sm font-light leading-relaxed">
+    Bowls saludables e ingredientes frescos directo a tu mesa en Manizales.
+  </p>
+</div>
 
       <div className="max-w-7xl mx-auto px-6 pb-6">
         <header className="mb-4 flex items-center justify-between gap-4">
-          <h2 className="text-2xl font-bold">Arma tu Bowl</h2>
+          <h2 className="text-2xl font-semibold">Arma tu Bowl</h2>
 
           <div className="flex items-center gap-2">
             <button
@@ -560,7 +604,6 @@ const order = {
             {/* Bowls - Optimizados para Móvil y Escritorio */}
             {!current && (
               <div className="w-full">
-                <h2 className="text-xl font-bold mb-4 text-gray-900 px-1">Nuestros Bowls</h2>
                 
                 {/* 👇 DINÁMICO: 3 columnas de bowls si no hay panel lateral, 2 si lo hay */}
                 <div className={`grid grid-cols-1 sm:grid-cols-2 ${(current || (cart?.length || 0) > 0) ? "" : "lg:grid-cols-3"} gap-4`}>
@@ -575,7 +618,7 @@ const order = {
                         className="group relative flex items-center justify-between gap-3 p-3.5 sm:p-4 bg-white border border-gray-100 rounded-2xl shadow-sm active:scale-[0.98] active:bg-gray-50 hover:shadow-md transition-all duration-200 cursor-pointer touch-manipulation"
                       >
                         <div className="flex-1 min-w-0 py-1">
-                          <h3 className="text-lg font-bold text-gray-900 truncate">
+                          <h3 className="text-lg font-semibold text-gray-900 truncate">
                             {b?.name}
                           </h3>
                           <p className="text-sm text-gray-500 line-clamp-2 mt-0.5 leading-snug pr-2">
@@ -588,7 +631,7 @@ const order = {
                                 <span className="text-sm text-gray-400 line-through">${money(Number(b?.precio || 0))}</span>
                               </>
                             ) : (
-                              <span className="text-lg font-extrabold text-gray-900">${money(Number(b?.precio || 0))}</span>
+                              <span className="text-lg font-bold text-gray-900">${money(Number(b?.precio || 0))}</span>
                             )}
                           </div>
                         </div>
@@ -604,7 +647,7 @@ const order = {
                             )}
                           </div>
                           {pct > 0 && (
-                            <div className="absolute -top-2 -left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-sm z-10 border-2 border-white">
+                            <div className="absolute -top-2 -left-2 bg-yellow-500  text-white text-[10px] font-black px-2 py-1 rounded-lg z-10">
                               -{pct}%
                             </div>
                           )}
@@ -781,18 +824,16 @@ const order = {
                 )}
        
 
-
-                {/* Totales */}
-                {/* Totales */}
+        {/* Totales */}
                 <div className="space-y-1">
                   <div className="flex justify-between items-center text-sm text-gray-600">
                     <span>Subtotal</span>
                     <span>${fmt(displaySubtotal)}</span>
                   </div>
 
-                  {promoDiscount > 0 && (
+                  {promoDiscount > 0 && appliedPromo && (
                     <div className="flex justify-between items-center text-sm text-red-600">
-                      <span>Promo {appliedCode ? `(${appliedCode} · ${promoPct}%)` : ""}</span>
+                      <span>Promo ({appliedPromo.code} · {appliedPromo.discountPct}%)</span>
                       <span>- ${fmt(promoDiscount)}</span>
                     </div>
                   )}
@@ -814,7 +855,7 @@ const order = {
 
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
-                    className="px-4 py-3 bg-emerald-600 text-white rounded w-full"
+                    className="px-4 py-3 bg-green-500 text-white rounded w-full"
                     onClick={() => {
                       addBowlToCart();
                     }}
@@ -853,7 +894,7 @@ const order = {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                     </svg>
                     <span className="font-medium text-gray-700">
-                      {appliedCode ? `Código aplicado: ${appliedCode}` : "¿Tienes un código promocional?"}
+                      {appliedPromo ? `Código aplicado: ${appliedPromo.code}` : "¿Tienes un código promocional?"}
                     </span>
                   </div>
                   <span className="text-gray-400 text-xl leading-none font-light">
@@ -869,12 +910,13 @@ const order = {
                         placeholder="INGRESA TU CÓDIGO"
                         value={promoInput}
                         onChange={(e) => setPromoInput(e.target.value)}
-                        disabled={!!appliedCode}
+                        disabled={!!appliedPromo}
                       />
-                      {!appliedCode ? (
+                      {!appliedPromo ? (
                         <button
                           onClick={applyPromo}
-                          className="px-6 py-2.5 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 transition-colors shadow-sm"
+                          className="px-6 py-2.5 rounded-lg bg-emerald-600 text-white font-medium 
+                           transition-colors shadow-sm"
                         >
                           Aplicar
                         </button>
@@ -896,7 +938,7 @@ const order = {
 
           {/* 👇 RESUMEN LATERAL (TU PEDIDO) - Panel Premium para PC */}
           {(current || (cart?.length || 0) > 0) && (
-            <aside className="p-5 border border-gray-100 bg-white rounded-xl h-fit sticky top-4 hidden lg:block shadow-sm">
+            <aside className="p-5 border border-gray-100 bg-white rounded-xl h-fit sticky top-4  shadow-sm">
               <PedidoResumen cart={cart} current={current} currentPrice={currentPrice} />
               
               <div className="mt-4 pt-4 border-t border-gray-100 text-sm text-gray-600 space-y-2">
@@ -904,9 +946,9 @@ const order = {
                   <span>Subtotal</span>
                   <span className="font-medium">${fmt(displaySubtotal)}</span>
                 </div>
-                {promoDiscount > 0 && (
+                {promoDiscount > 0 && appliedPromo && (
                   <div className="flex justify-between text-emerald-600 font-medium">
-                    <span>Promo {appliedCode ? `(${appliedCode})` : ""}</span>
+                    <span>Promo ({appliedPromo.code})</span>
                     <span>- ${fmt(promoDiscount)}</span>
                   </div>
                 )}
@@ -932,8 +974,6 @@ const order = {
             </aside>
           )}
         </main>
-
-        
 
         {/* Modales */}
         {checkoutOpen && (

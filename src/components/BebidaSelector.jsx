@@ -7,7 +7,7 @@ export default function BebidaSelector({ current, setCurrent, menu, onExtraDrink
   const bebidas = Array.isArray(menu?.bebidas) ? menu.bebidas : [];
   const categories = Array.isArray(menu?.beveragesCategories) ? menu.beveragesCategories : [];
 
-  // ========== helpers estado ==========
+  // ========== helpers estado (LÓGICA INTACTA) ==========
   const getQty = (id) => Math.max(0, Number(current?.bebidas?.[id] || 0));
   const setQty = (id, next) => {
     setCurrent((prev) => {
@@ -52,60 +52,84 @@ export default function BebidaSelector({ current, setCurrent, menu, onExtraDrink
 
   const unassigned = bebidas.filter((b) => !usedIds.has(b.id));
 
-  // === UI helpers
+  // === UI helpers (ESTILOS NUEVOS TIPO RAPPI) ===
   const Card = ({ b }) => {
     const qty = getQty(b.id);
-    const active = qty > 0;
+    
     return (
-      <div
-        className={`relative border rounded p-2 hover:shadow ${active ? "ring-2 ring-green-600 border-green-600" : ""}`}
-      >
-        {active && (
-          <span className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-green-600 text-white text-xs grid place-items-center shadow">
-            ✓
-          </span>
-        )}
-        <div className="w-full aspect-video bg-gray-100 rounded overflow-hidden mb-2">
+      <div className="relative flex flex-col w-full group">
+        
+        {/* Contenedor de Imagen */}
+        <div className="relative w-full aspect-[4/5] bg-transparent rounded-xl mb-3 flex items-center justify-center">
           {b?.img ? (
-            <img src={b.img} alt={b?.name || "Bebida"} className="w-full h-full object-cover" />
-          ) : null}
-        </div>
-        <div className="font-medium">{b?.name || "Sin nombre"}</div>
-        <div className="text-xs text-gray-600 mt-1">${(Number(b?.precio) || 0).toLocaleString()}</div>
+            <img 
+              src={b.img} 
+              alt={b?.name || "Bebida"} 
+              className="w-full h-full object-contain object-center mix-blend-multiply" 
+            />
+          ) : (
+            <div className="w-full h-full bg-gray-50 rounded-xl" />
+          )}
 
-        {/* Controles de cantidad */}
-        <div className="mt-2 flex items-center justify-center gap-2">
-          <button
-            type="button"
-            className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 grid place-items-center text-lg"
-            onClick={() => dec(b.id)}
-            aria-label="Quitar"
-          >
-            –
-          </button>
-          <input
-            type="number"
-            min={0}
-            step={1}
-            value={qty}
-            onChange={(e) => setQty(b.id, e.target.value)}
-            className="w-16 border rounded text-center py-1"
-          />
-          <button
-            type="button"
-            className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 grid place-items-center text-lg"
-            onClick={() => inc(b.id)}
-            aria-label="Agregar"
-          >
-            +
-          </button>
+          {/* Botón flotante (+) o Selector de cantidad */}
+          {qty === 0 ? (
+            <button
+              type="button"
+              className="absolute top-1 right-1 w-8 h-8 rounded-full bg-[#3DC957] text-white flex items-center justify-center text-2xl font-medium shadow-sm hover:scale-105 transition-transform"
+              onClick={() => inc(b.id)}
+              aria-label="Agregar"
+            >
+              +
+            </button>
+          ) : (
+            <div className="absolute top-1 right-1 h-8 bg-[#3DC957] text-white rounded-full flex items-center shadow-md px-1">
+              <button
+                type="button"
+                className="w-7 h-full flex items-center justify-center text-xl font-bold active:scale-90 transition-transform"
+                onClick={() => dec(b.id)}
+              >
+                −
+              </button>
+              
+              {/* Input ocultando las flechitas nativas del navegador */}
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={qty}
+                onChange={(e) => setQty(b.id, e.target.value)}
+                className="w-6 bg-transparent text-center text-sm font-bold text-white outline-none m-0 p-0"
+                style={{ appearance: "textfield", WebkitAppearance: "none", MozAppearance: "textfield" }}
+              />
+              
+              <button
+                type="button"
+                className="w-7 h-full flex items-center justify-center text-xl font-medium active:scale-90 transition-transform"
+                onClick={() => inc(b.id)}
+              >
+                +
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Textos (Precio y Nombre) */}
+        <div className="text-left w-full px-1">
+          <div className="text-lg font-bold text-black leading-none">
+            ${(Number(b?.precio) || 0).toLocaleString()}
+          </div>
+          <div className="text-sm text-gray-700 mt-1.5 leading-snug">
+            {b?.name || "Sin nombre"}
+          </div>
+        </div>
+        
       </div>
     );
   };
 
   const Grid = ({ items }) => (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+    // Amplié el gap (espacio entre tarjetas) para que respiren mejor
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 sm:gap-6">
       {items.map((b, idx) => (
         <div key={b?.id ? String(b.id) : `bebida-${idx}`}>
           <Card b={b} />
@@ -118,19 +142,14 @@ export default function BebidaSelector({ current, setCurrent, menu, onExtraDrink
 
   return (
     <div className="space-y-3">
-      <style>{`
-        /* Mantiene tus imágenes "sin recortes" para bebidas */
-        .mc-bev img { width: 100%; height: 100%; object-fit: contain !important; object-position: center; }
-      `}</style>
-
-      {/* Sin categorías → render clásico (retrocompatible) */}
+      {/* Sin categorías → render clásico */}
       {!hasCategories ? (
         <div className="mc-bev">
           <Grid items={bebidas} />
         </div>
       ) : (
         <div className="space-y-3 mc-bev">
-          {/* Categorías con acordeones nativos (sin estado extra) */}
+          {/* Categorías con acordeones nativos */}
           {catsResolved
             .filter((c) => c.items.length > 0)
             .map((cat) => (
@@ -139,24 +158,11 @@ export default function BebidaSelector({ current, setCurrent, menu, onExtraDrink
                   <span>{cat.name}</span>
                   <span className="text-xs text-gray-500">{cat.items.length} ref.</span>
                 </summary>
-                <div className="p-3">
+                <div className="p-4 bg-white">
                   <Grid items={cat.items} />
                 </div>
               </details>
           ))}
-
-          {/* “Sin categoría” → todo lo no asignado */}
-          {unassigned.length > 0 && (
-            <details className="border rounded-lg overflow-hidden">
-              <summary className="list-none px-4 py-3 bg-gray-50 cursor-pointer font-medium flex items-center justify-between">
-                <span>Otras bebidas</span>
-                <span className="text-xs text-gray-500">{unassigned.length} ref.</span>
-              </summary>
-              <div className="p-3">
-                <Grid items={unassigned} />
-              </div>
-            </details>
-          )}
         </div>
       )}
     </div>
